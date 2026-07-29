@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>أسعار الذهب والفضة الآن</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Tahoma, sans-serif;
+      background: #f5f5f5;
+      color: #222;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: 20px auto;
+      padding: 15px;
+    }
+
+    .header {
+      background: #222;
+      color: white;
+      padding: 25px 15px;
+      border-radius: 15px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      margin: 0 0 10px;
+      font-size: 26px;
+    }
+
+    .update-time {
+      font-size: 14px;
+      opacity: 0.8;
+    }
+
+    .card {
+      background: white;
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+    }
+
+    .card h2 {
+      text-align: center;
+      margin-top: 0;
+      font-size: 23px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+
+    th, td {
+      padding: 14px 8px;
+      text-align: center;
+      border-bottom: 1px solid #eee;
+    }
+
+    th {
+      background: #eee;
+    }
+
+    .price-box {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 15px;
+    }
+
+    .price {
+      background: #f7f7f7;
+      padding: 15px;
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .price strong {
+      display: block;
+      font-size: 20px;
+      margin-top: 5px;
+    }
+
+    .refresh {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      background: #222;
+      color: white;
+      font-size: 17px;
+      cursor: pointer;
+      margin-top: 15px;
+    }
+
+    .refresh:hover {
+      opacity: 0.85;
+    }
+
+    .footer {
+      text-align: center;
+      font-size: 13px;
+      color: #777;
+      padding: 10px;
+    }
+
+    @media (max-width: 500px) {
+      .container {
+        margin: 10px auto;
+        padding: 10px;
+      }
+
+      .price-box {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <h1>⚱️ أسعار الذهب والفضة الآن ⚱️</h1>
+    <div class="update-time">
+      آخر تحديث: <span id="updateTime">--</span>
+    </div>
+  </div>
+
+  <!-- الذهب -->
+  <div class="card">
+
+    <h2>⚱️ سعر الذهب الآن ⚱️</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>العيار</th>
+          <th>شراء</th>
+          <th>بيع</th>
+        </tr>
+      </thead>
+
+      <tbody>
+
+        <tr>
+          <td>عيار 21</td>
+          <td>6000 جنيه</td>
+          <td>5950 جنيه</td>
+        </tr>
+
+        <tr>
+          <td>عيار 18</td>
+          <td>5143 جنيه</td>
+          <td>5093 جنيه</td>
+        </tr>
+
+        <tr>
+          <td>عيار 24</td>
+          <td>6857 جنيه</td>
+          <td>6800 جنيه</td>
+        </tr>
+
+      </tbody>
+    </table>
+
+    <div class="price-box">
+
+      <div class="price">
+        🪙 جنيه ذهب بدون مصنعية
+        <strong>48000 جنيه</strong>
+      </div>
+
+      <div class="price">
+        ⚱️ أونصة الذهب
+        <strong>4160$</strong>
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- الفضة -->
+  <div class="card">
+
+    <h2>🪙 سعر الفضة الآن 🪙</h2>
+
+    <table>
+
+      <thead>
+        <tr>
+          <th>النوع</th>
+          <th>شراء</th>
+          <th>بيع</th>
+        </tr>
+      </thead>
+
+      <tbody>
+
+        <tr>
+          <td>نجم الدين</td>
+          <td>100 جنيه</td>
+          <td>100 جنيه</td>
+        </tr>
+
+        <tr>
+          <td>بي تي سي</td>
+          <td>100 جنيه</td>
+          <td>95 جنيه</td>
+        </tr>
+
+      </tbody>
+
+    </table>
+
+    <div class="price-box">
+
+      <div class="price">
+        🪙 أونصة الفضة
+        <strong>60.46$</strong>
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <button class="refresh" onclick="updateTime()">
+    🔄 تحديث وقت العرض
+  </button>
+
+  <div class="footer">
+    الأسعار المعروضة قابلة للتحديث
+  </div>
+
+</div>
+
+
+<script>
+
+function updateTime() {
+
+  const now = new Date();
+
+  const time = now.toLocaleString('ar-EG', {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  });
+
+  document.getElementById('updateTime').textContent = time;
+}
+
+updateTime();
+
+</script>
+
+</body>
+</html>
