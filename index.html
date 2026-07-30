@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>أسعار الذهب والفضة الآن</title>
 
 <style>
@@ -14,7 +15,7 @@ body{
 }
 
 header{
-    background:linear-gradient(45deg,#b8860b,#ffd700);
+    background:linear-gradient(45deg,#d4af37,#ffd700);
     color:#000;
     text-align:center;
     padding:20px;
@@ -70,25 +71,49 @@ td{
 
 .info{
     text-align:center;
-    font-size:20px;
+    font-size:18px;
     margin-top:15px;
     line-height:2;
 }
-</style>
 
+.status{
+    text-align:center;
+    margin-top:15px;
+    color:#ccc;
+    font-size:14px;
+}
+
+.loading{
+    text-align:center;
+    color:gold;
+    padding:15px;
+}
+
+.error{
+    text-align:center;
+    color:#ff5555;
+    padding:15px;
+}
+</style>
 </head>
+
 <body>
 
 <header>
-⚱️ أسعار الذهب والفضة الآن ⚱️
+🪙 أسعار الذهب والفضة الآن 🪙
 </header>
 
 <div class="container">
 
 <div class="card">
-<h2>أسعار الذهب</h2>
 
-<table>
+<h2>🥇 أسعار الذهب</h2>
+
+<div id="loading" class="loading">
+جاري تحديث الأسعار...
+</div>
+
+<table id="goldTable" style="display:none;">
 <tr>
 <th>العيار</th>
 <th>شراء</th>
@@ -96,54 +121,77 @@ td{
 </tr>
 
 <tr>
+<td>24</td>
+<td id="buy24" class="buy">--</td>
+<td id="sell24" class="sell">--</td>
+</tr>
+
+<tr>
 <td>21</td>
-<td class="buy">6000</td>
-<td class="sell">5950</td>
+<td id="buy21" class="buy">--</td>
+<td id="sell21" class="sell">--</td>
 </tr>
 
 <tr>
 <td>18</td>
-<td class="buy">5143</td>
-<td class="sell">5093</td>
-</tr>
-
-<tr>
-<td>24</td>
-<td class="buy">6857</td>
-<td class="sell">6800</td>
+<td id="buy18" class="buy">--</td>
+<td id="sell18" class="sell">--</td>
 </tr>
 
 </table>
 
 <div class="info">
-🪙 الجنيه الذهب: <b>48000</b><br><br>
-🌍 أونصة الذهب: <b>4160 $</b><br><br>
-🥈 أونصة الفضة: <b>60.46 $</b>
+
+💰 سعر الجرام عيار 24:
+<b id="price24">--</b> جنيه
+
+<br>
+
+💰 سعر الجرام عيار 21:
+<b id="price21">--</b> جنيه
+
+<br>
+
+💰 سعر الجرام عيار 18:
+<b id="price18">--</b> جنيه
+
+</div>
+
+<div id="status" class="status">
+آخر تحديث: --
 </div>
 
 </div>
+
 
 <div class="card">
 
-<h2>أسعار الفضة</h2>
+<h2>🪙 أسعار الأونصة</h2>
+
+<div class="info">
+
+سعر أونصة الذهب:
+<b id="ounce">--</b> جنيه
+
+</div>
+
+</div>
+
+
+<div class="card">
+
+<h2>🥈 أسعار الفضة</h2>
 
 <table>
+
 <tr>
 <th>النوع</th>
-<th>شراء</th>
-<th>بيع</th>
+<th>السعر</th>
 </tr>
 
 <tr>
-<td>نجم الدين</td>
-<td class="buy">100</td>
-<td class="sell">100</td>
-</tr>
-
-<tr>
-<td>BTC</td>
-<td class="buy">100</td>
-<td class="sell">95</td>
+<td>الفضة</td>
+<td id="silver">--</td>
 </tr>
 
 </table>
@@ -151,6 +199,154 @@ td{
 </div>
 
 </div>
+
+
+<script>
+
+const API =
+"https://api.goldprice.dev/v1/carat?currency=EGP";
+
+const REFRESH_TIME = 5 * 60 * 1000;
+
+
+// تقريب السعر إلى أقرب جنيه
+function formatPrice(value){
+
+    return Math.round(Number(value)).toLocaleString("ar-EG");
+
+}
+
+
+// تحديث الأسعار
+async function updatePrices(){
+
+    const loading =
+        document.getElementById("loading");
+
+    const table =
+        document.getElementById("goldTable");
+
+    try{
+
+        loading.style.display = "block";
+        loading.innerText =
+            "🔄 جاري تحديث الأسعار...";
+
+        const response =
+            await fetch(API, {
+                cache:"no-store"
+            });
+
+        if(!response.ok){
+            throw new Error("API Error");
+        }
+
+        const data =
+            await response.json();
+
+
+        // أسعار الذهب بالجرام
+        const price24 =
+            Number(data.price_gram_24k);
+
+        const price21 =
+            Number(data.price_gram_21k);
+
+        const price18 =
+            Number(data.price_gram_18k);
+
+
+        if(!price24 || !price21 || !price18){
+            throw new Error("Invalid prices");
+        }
+
+
+        // عرض الأسعار
+        document.getElementById("price24").innerText =
+            formatPrice(price24);
+
+        document.getElementById("price21").innerText =
+            formatPrice(price21);
+
+        document.getElementById("price18").innerText =
+            formatPrice(price18);
+
+
+        /*
+          هنا نضع هامش بسيط للشراء والبيع.
+          يمكنك تغييره لاحقاً حسب الأسعار المحلية.
+        */
+
+        const buy24 = price24 * 0.99;
+        const sell24 = price24 * 1.01;
+
+        const buy21 = price21 * 0.99;
+        const sell21 = price21 * 1.01;
+
+        const buy18 = price18 * 0.99;
+        const sell18 = price18 * 1.01;
+
+
+        document.getElementById("buy24").innerText =
+            formatPrice(buy24);
+
+        document.getElementById("sell24").innerText =
+            formatPrice(sell24);
+
+        document.getElementById("buy21").innerText =
+            formatPrice(buy21);
+
+        document.getElementById("sell21").innerText =
+            formatPrice(sell21);
+
+        document.getElementById("buy18").innerText =
+            formatPrice(buy18);
+
+        document.getElementById("sell18").innerText =
+            formatPrice(sell18);
+
+
+        // الأونصة = 31.1034768 جرام
+        const ounce =
+            price24 * 31.1034768;
+
+        document.getElementById("ounce").innerText =
+            formatPrice(ounce);
+
+
+        table.style.display = "table";
+
+        loading.style.display = "none";
+
+
+        const now =
+            new Date();
+
+        document.getElementById("status").innerText =
+            "🟢 آخر تحديث: " +
+            now.toLocaleString("ar-EG");
+
+
+    }catch(error){
+
+        console.error(error);
+
+        loading.innerText =
+            "⚠️ تعذر تحديث الأسعار، سيتم المحاولة مرة أخرى تلقائياً.";
+
+    }
+
+}
+
+
+// تحديث عند فتح الصفحة
+updatePrices();
+
+
+// تحديث تلقائي كل 5 دقائق
+setInterval(updatePrices, REFRESH_TIME);
+
+</script>
 
 </body>
 </html>
