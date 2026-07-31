@@ -3,109 +3,118 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسعار الذهب والفضة</title>
+    <!-- منع الكاش نهائياً على مستوى الصفحة -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>أسعار الذهب والفضة الآن</title>
     <style>
+        /* الأنماط والتصميم الخاص بك */
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: #121212;
             color: #ffffff;
-            margin: 0;
-            padding: 15px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             text-align: center;
+            margin: 0;
+            padding: 0;
         }
         .header {
-            background: linear-gradient(135deg, #ffd700, #ffa500);
+            background-color: #ffd700;
             color: #000;
-            padding: 15px;
-            border-radius: 12px;
+            padding: 20px;
+            font-size: 24px;
             font-weight: bold;
-            font-size: 20px;
-            margin-bottom: 15px;
         }
         .card {
             background-color: #1e1e1e;
             border: 1px solid #333;
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 15px;
+            border-radius: 15px;
+            margin: 20px auto;
+            max-width: 400px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(255, 215, 0, 0.1);
         }
-        h2 { color: #ffd700; font-size: 18px; margin: 0 0 10px 0; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 10px 5px; border-bottom: 1px solid #333; font-size: 15px; }
-        th { background-color: #2a2a2a; color: #ffd700; }
-        .buy { color: #4caf50; font-weight: bold; }
-        .sell { color: #f44336; font-weight: bold; }
-        .update-box { font-size: 13px; color: #aaa; margin-top: 10px; }
-        .dot { height: 8px; width: 8px; background-color: #4caf50; border-radius: 50%; display: inline-block; margin-left: 5px; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th {
+            background-color: #ffd700;
+            color: #000;
+            padding: 10px;
+        }
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #333;
+        }
+        .buy-price { color: #4caf50; font-weight: bold; }
+        .sell-price { color: #f44336; font-weight: bold; }
+        .info-row { margin: 8px 0; font-size: 16px; }
+        .timestamp { color: #888; font-size: 14px; margin-top: 15px; }
+        .dot { height: 10px; width: 10px; background-color: #4caf50; border-radius: 50%; display: inline-block; margin-left: 5px; }
     </style>
 </head>
 <body>
 
-    <div class="header">🪙 أسعار الذهب والفضة الآن</div>
-
-    <div class="card">
-        <h2>🥇 أسعار الذهب (جنيه مصري)</h2>
-        <table>
-            <thead>
-                <tr><th>العيار</th><th>شراء</th><th>بيع</th></tr>
-            </thead>
-            <tbody>
-                <tr><td>عيار 24</td><td id="b24" class="buy">--</td><td id="s24" class="sell">--</td></tr>
-                <tr><td>عيار 21</td><td id="b21" class="buy">--</td><td id="s21" class="sell">--</td></tr>
-                <tr><td>عيار 18</td><td id="b18" class="buy">--</td><td id="s18" class="sell">--</td></tr>
-            </tbody>
-        </table>
+    <div class="header">
+        🪙 أسعار الذهب والفضة الآن
     </div>
 
     <div class="card">
-        <h2>🥈 أسعار الفضة (جنيه مصري)</h2>
+        <h2>🥇 أسعار الذهب</h2>
         <table>
             <thead>
-                <tr><th>النوع</th><th>شراء</th><th>بيع</th></tr>
+                <tr>
+                    <th>العيار</th>
+                    <th>شراء</th>
+                    <th>بيع</th>
+                </tr>
             </thead>
-            <tbody>
-                <tr><td>فضة 999</td><td id="bSil" class="buy">--</td><td id="sSil" class="sell">--</td></tr>
+            <tbody id="gold-table-body">
+                <!-- سيتم ملء البيانات هنا -->
             </tbody>
         </table>
-        <div class="update-box">
-            <span class="dot"></span> آخر تحديث: <span id="clock">--:--:--</span>
+
+        <div id="gold-details">
+            <!-- تفاصيل الأسعار -->
+        </div>
+
+        <div class="timestamp">
+            <span class="dot"></span> آخر تحديث: <span id="last-updated">جاري التحميل...</span>
         </div>
     </div>
 
     <script>
-        // أسعار الأساس للسوق المحلي
-        const basePrice24 = 4550; 
-        const baseSilver = 55;
+        async function fetchPrices() {
+            try {
+                // إضائة حيلة منع الكاش بإضافة Timestamp برابط الطلب
+                const response = await fetch('YOUR_API_ENDPOINT_HERE?t=' + new Date().getTime(), {
+                    cache: "no-store"
+                });
+                
+                const data = await response.json();
 
-        function updateData() {
-            // إضافة حركة طفيفة محاكاة للتغير اللحظي دون الاعتماد على طلبات شبكة خارجية تسبب إغلاق الصفحة
-            const variation = Math.floor(Math.random() * 5) - 2; 
+                // تحديث جدول الأسعار والبيانات (قم بتعديل المسميات حسب الـ API الخاص بك)
+                updateUI(data);
 
-            const p24 = basePrice24 + variation;
-            const p21 = Math.round(p24 * (21 / 24));
-            const p18 = Math.round(p24 * (18 / 24));
-            const pSil = baseSilver + (variation > 0 ? 1 : 0);
-
-            // عرض البيانات
-            document.getElementById('b24').textContent = (p24 - 15).toLocaleString('ar-EG') + ' ج.م';
-            document.getElementById('s24').textContent = (p24 + 15).toLocaleString('ar-EG') + ' ج.م';
-
-            document.getElementById('b21').textContent = (p21 - 15).toLocaleString('ar-EG') + ' ج.م';
-            document.getElementById('s21').textContent = (p21 + 15).toLocaleString('ar-EG') + ' ج.م';
-
-            document.getElementById('b18').textContent = (p18 - 15).toLocaleString('ar-EG') + ' ج.م';
-            document.getElementById('s18').textContent = (p18 + 15).toLocaleString('ar-EG') + ' ج.م';
-
-            document.getElementById('bSil').textContent = (pSil - 1).toLocaleString('ar-EG') + ' ج.م';
-            document.getElementById('sSil').textContent = (pSil + 1).toLocaleString('ar-EG') + ' ج.م';
-
-            const now = new Date();
-            document.getElementById('clock').textContent = now.toLocaleTimeString('ar-EG');
+                // تحديث وقت آخر تحديث
+                const now = new Date();
+                document.getElementById('last-updated').innerText = now.toLocaleDateString('ar-EG') + '، ' + now.toLocaleTimeString('ar-EG');
+            } catch (error) {
+                console.error('خطأ في جلب البيانات:', error);
+            }
         }
 
-        // تشغيل التحديث فوراً وكل 10 ثوانٍ
-        updateData();
-        setInterval(updateData, 10000);
+        function updateUI(data) {
+            // كود تحديث عناصر DOM بالبيانات الجديدة
+        }
+
+        // تشغيل الجلب فور فتح الصفحة
+        fetchPrices();
+
+        // إعادة الجلب تلقائياً كل 30 ثانية
+        setInterval(fetchPrices, 30000);
     </script>
 </body>
 </html>
