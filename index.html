@@ -1,26 +1,73 @@
-async function updatePrices() {
-  try {
-    // 1. جلب سعر الدولار مقابل الجنيه
-    const response = await fetch('https://open.er-api.com/v6/latest/USD');
-    const data = await response.json();
-    const usdToEgp = data.rates.EGP;
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>أسعار الذهب</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 20px;
+            background-color: #f9f9f9;
+            text-align: center;
+        }
+        .price-card {
+            background: #fff;
+            padding: 15px;
+            margin: 10px auto;
+            max-width: 300px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .price-val {
+            font-weight: bold;
+            color: #d4af37;
+        }
+    </style>
+</head>
+<body>
 
-    // 2. حساب عيار 24 (سعر الأونصة افتراضي 2400 دولار كمثال)
-    const goldOunceUSD = 2400; 
-    const price24 = Math.round((goldOunceUSD / 31.1034768) * usdToEgp);
+    <h2>أسعار الذهب المباشرة</h2>
 
-    // 3. تحديث الأرقام في الواجهة (DOM)
-    document.getElementById('buy24').textContent = price24.toLocaleString('ar-EG');
-    document.getElementById('sell24').textContent = Math.round(price24 * 1.02).toLocaleString('ar-EG');
-    document.getElementById('last-update').textContent = new Date().toLocaleTimeString('ar-EG');
+    <div class="price-card">
+        <div>سعر الشراء (عيار 24): <span id="buy24" class="price-val">جاري التحميل...</span> ج.م</div>
+    </div>
 
-  } catch (error) {
-    console.error('خطأ في البيانات:', error);
-  }
-}
+    <div class="price-card">
+        <div>سعر البيع (عيار 24): <span id="sell24" class="price-val">جاري التحميل...</span> ج.م</div>
+    </div>
 
-// تشغيل التحديث التلقائي كل 30 ثانية
-setInterval(updatePrices, 30000);
+    <p><small>آخر تحديث: <span id="last-update">--:--:--</span></small></p>
 
-// تشغيل الدالة فور تحميل الصفحة أول مرة
-updatePrices();
+    <!-- هنا التعديل المهم: الكود المرجعي يجب أن يكون داخل وسم script -->
+    <script>
+        async function updatePrices() {
+            try {
+                // 1. جلب سعر الدولار
+                const response = await fetch('https://open.er-api.com/v6/latest/USD');
+                const data = await response.json();
+                const usdToEgp = data.rates.EGP;
+
+                // 2. حساب سعر عيار 24 (افتراضي)
+                const goldOunceUSD = 2400; 
+                const price24 = Math.round((goldOunceUSD / 31.1034768) * usdToEgp);
+
+                // 3. عرض الأرقام في الصفحة
+                document.getElementById('buy24').textContent = price24.toLocaleString('ar-EG');
+                document.getElementById('sell24').textContent = Math.round(price24 * 1.02).toLocaleString('ar-EG');
+                document.getElementById('last-update').textContent = new Date().toLocaleTimeString('ar-EG');
+
+            } catch (error) {
+                console.error('خطأ في جلب البيانات:', error);
+                document.getElementById('buy24').textContent = 'خطأ في الاتصال';
+            }
+        }
+
+        // تشغيل الدالة فور فتح الصفحة
+        updatePrices();
+
+        // إعادة التحديث كل 30 ثانية
+        setInterval(updatePrices, 30000);
+    </script>
+</body>
+</html>
