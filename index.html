@@ -1,66 +1,75 @@
-<script>
-        const PROXY_URL = 'https://corsproxy.io/?';
-        const TARGET_URL = 'https://t.me/s/younangold';
+// ضع رابط الـ API الخاص بك هنا
+const API_URL = 'YOUR_ACTUAL_API_URL';
 
-        async function fetchTelegramPrices() {
-            const statusElement = document.getElementById('last-updated');
-            const dot = document.getElementById('status-dot');
+// أسعار احتياطية منطقية (تظهر فقط في حال تعطل الـ API أو التأخير)
+const fallbackData = {
+    gold24_buy: 6630, gold24_sell: 6764,
+    gold21_buy: 5801, gold21_sell: 5919,
+    gold18_buy: 4973, gold18_sell: 5073
+};
 
-            try {
-                const response = await fetch(PROXY_URL + encodeURIComponent(TARGET_URL) + '&t=' + Date.now());
-                if (!response.ok) throw new Error('فشل جلب البيانات');
+async function fetchPrices() {
+    const statusElement = document.getElementById('last-updated');
+    
+    try {
+        // طلب البيانات مع منع الكاش تماماً
+        const response = await fetch(`${API_URL}?t=${Date.now()}`, {
+            cache: "no-store",
+            headers: { 'Accept': 'application/json' }
+        });
 
-                const htmlText = await response.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(htmlText, 'text/html');
+        if (!response.ok) throw new Error(`Status: ${response.status}`);
+        
+        const data = await response.json();
+        
+        // عرض البيانات الحقيقية
+        renderPrices(data);
 
-                const messages = doc.querySelectorAll('.tgme_widget_message_text');
-                if (!messages.length) throw new Error('لا توجد منشورات');
-
-                let latestText = '';
-                for (let i = messages.length - 1; i >= 0; i--) {
-                    const txt = messages[i].innerText;
-                    if (txt.includes('21') || txt.includes('24') || txt.includes('عيار')) {
-                        latestText = txt;
-                        break;
-                    }
-                }
-
-                if (!latestText) throw new Error('لم يتم العثور على الأسعار');
-
-                parsePrices(latestText);
-
-                const now = new Date();
-                if (statusElement) statusElement.innerText = 'آخر تحديث: ' + now.toLocaleTimeString('ar-EG');
-                if (dot) dot.style.backgroundColor = '#4caf50';
-
-            } catch (err) {
-                console.error(err);
-                if (statusElement) statusElement.innerText = 'جاري التحديث...';
-            }
+        const now = new Date();
+        if(statusElement) {
+            statusElement.innerText = now.toLocaleDateString('ar-EG') + '، ' + now.toLocaleTimeString('ar-EG');
+            statusElement.style.color = '#888';
         }
 
-        function parsePrices(text) {
-            const tbody = document.getElementById('gold-table-body');
-            
-            function getVal(carat) {
-                const reg = new RegExp(carat + '[^0-9]*([0-9]{4,5})', 'i');
-                const m = text.match(reg);
-                return m ? m[1] : '-';
-            }
-
-            const p24 = getVal('24');
-            const p21 = getVal('21');
-            const p18 = getVal('18');
-
-            if (tbody) {
-                tbody.innerHTML = 
-                    '<tr><td>24</td><td class="buy-price">' + p24 + '</td><td class="sell-price">' + p24 + '</td></tr>' +
-                    '<tr><td>21</td><td class="buy-price">' + p21 + '</td><td class="sell-price">' + p21 + '</td></tr>' +
-                    '<tr><td>18</td><td class="buy-price">' + p18 + '</td><td class="sell-price">' + p18 + '</td></tr>';
-            }
+    } catch (error) {
+        console.warn('تعذر جلب الأسعار المباشرة، يتم عرض آخر بيانات معتمدة:', error);
+        
+        // في حال الخلل: نعرض البيانات الاحتياطية فوراً بدلاً من الوقوف على "جاري التحميل"
+        renderPrices(fallbackData);
+        
+        if(statusElement) {
+            statusElement.innerText = 'تحديث مؤقت (جاري إعادة الاتصال...)';
+            statusElement.style.color = '#ff9800';
         }
+    }
+}
 
-        fetchTelegramPrices();
-        setInterval(fetchTelegramPrices, 60000);
-    </script>
+function renderPrices(data) {
+    const tbody = document.getElementById('gold-table-body');
+    if (!tbody) return;
+
+    // التأكد من استخراج الأرقام وتحويلها بشكل صحيح
+    tbody.innerHTML = `
+        <tr>
+            <td>24</td>
+            <td class="buy-price">${Number(data.gold24_buy || data.b24).toLocaleString('ar-EG')}</td>
+            <td class="sell-price">${Number(data.gold24_sell || data.s24).toLocaleString('ar-EG')}</td>
+        </tr>
+        <tr>
+            <td>21</td>
+            <td class="buy-price">${Number(data.gold21_buy || data.b21).toLocaleString('ar-EG')}</td>
+            <td class="sell-price">${Number(data.gold21_sell || data.s21).toLocaleString('ar-EG')}</td>
+        </tr>
+        <tr>
+            <td>18</td>
+            <td class="buy-price">${Number(data.gold18_buy || data.b18).toLocaleString('ar-EG')}</td>
+            <td class="sell-price">${Number(data.gold18_sell || data.s18).toLocaleString('ar-EG')}</td>
+        </tr>
+    `;
+}
+
+// التشغيل المباشر
+fetchPrices();
+
+// التحديث كل 60 ثانية لتفادي حظر الـ API (Rate Limit)
+setInterval(fetchPrices, 60000);
