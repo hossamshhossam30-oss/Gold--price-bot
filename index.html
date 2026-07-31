@@ -1,120 +1,66 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- منع الكاش نهائياً على مستوى الصفحة -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-    <title>أسعار الذهب والفضة الآن</title>
-    <style>
-        /* الأنماط والتصميم الخاص بك */
-        body {
-            background-color: #121212;
-            color: #ffffff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            text-align: center;
-            margin: 0;
-            padding: 0;
-        }
-        .header {
-            background-color: #ffd700;
-            color: #000;
-            padding: 20px;
-            font-size: 24px;
-            font-weight: bold;
-        }
-        .card {
-            background-color: #1e1e1e;
-            border: 1px solid #333;
-            border-radius: 15px;
-            margin: 20px auto;
-            max-width: 400px;
-            padding: 20px;
-            box-shadow: 0 4px 10px rgba(255, 215, 0, 0.1);
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-        th {
-            background-color: #ffd700;
-            color: #000;
-            padding: 10px;
-        }
-        td {
-            padding: 10px;
-            border-bottom: 1px solid #333;
-        }
-        .buy-price { color: #4caf50; font-weight: bold; }
-        .sell-price { color: #f44336; font-weight: bold; }
-        .info-row { margin: 8px 0; font-size: 16px; }
-        .timestamp { color: #888; font-size: 14px; margin-top: 15px; }
-        .dot { height: 10px; width: 10px; background-color: #4caf50; border-radius: 50%; display: inline-block; margin-left: 5px; }
-    </style>
-</head>
-<body>
+<script>
+        const PROXY_URL = 'https://corsproxy.io/?';
+        const TARGET_URL = 'https://t.me/s/younangold';
 
-    <div class="header">
-        🪙 أسعار الذهب والفضة الآن
-    </div>
+        async function fetchTelegramPrices() {
+            const statusElement = document.getElementById('last-updated');
+            const dot = document.getElementById('status-dot');
 
-    <div class="card">
-        <h2>🥇 أسعار الذهب</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>العيار</th>
-                    <th>شراء</th>
-                    <th>بيع</th>
-                </tr>
-            </thead>
-            <tbody id="gold-table-body">
-                <!-- سيتم ملء البيانات هنا -->
-            </tbody>
-        </table>
-
-        <div id="gold-details">
-            <!-- تفاصيل الأسعار -->
-        </div>
-
-        <div class="timestamp">
-            <span class="dot"></span> آخر تحديث: <span id="last-updated">جاري التحميل...</span>
-        </div>
-    </div>
-
-    <script>
-        async function fetchPrices() {
             try {
-                // إضائة حيلة منع الكاش بإضافة Timestamp برابط الطلب
-                const response = await fetch('YOUR_API_ENDPOINT_HERE?t=' + new Date().getTime(), {
-                    cache: "no-store"
-                });
-                
-                const data = await response.json();
+                const response = await fetch(PROXY_URL + encodeURIComponent(TARGET_URL) + '&t=' + Date.now());
+                if (!response.ok) throw new Error('فشل جلب البيانات');
 
-                // تحديث جدول الأسعار والبيانات (قم بتعديل المسميات حسب الـ API الخاص بك)
-                updateUI(data);
+                const htmlText = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlText, 'text/html');
 
-                // تحديث وقت آخر تحديث
+                const messages = doc.querySelectorAll('.tgme_widget_message_text');
+                if (!messages.length) throw new Error('لا توجد منشورات');
+
+                let latestText = '';
+                for (let i = messages.length - 1; i >= 0; i--) {
+                    const txt = messages[i].innerText;
+                    if (txt.includes('21') || txt.includes('24') || txt.includes('عيار')) {
+                        latestText = txt;
+                        break;
+                    }
+                }
+
+                if (!latestText) throw new Error('لم يتم العثور على الأسعار');
+
+                parsePrices(latestText);
+
                 const now = new Date();
-                document.getElementById('last-updated').innerText = now.toLocaleDateString('ar-EG') + '، ' + now.toLocaleTimeString('ar-EG');
-            } catch (error) {
-                console.error('خطأ في جلب البيانات:', error);
+                if (statusElement) statusElement.innerText = 'آخر تحديث: ' + now.toLocaleTimeString('ar-EG');
+                if (dot) dot.style.backgroundColor = '#4caf50';
+
+            } catch (err) {
+                console.error(err);
+                if (statusElement) statusElement.innerText = 'جاري التحديث...';
             }
         }
 
-        function updateUI(data) {
-            // كود تحديث عناصر DOM بالبيانات الجديدة
+        function parsePrices(text) {
+            const tbody = document.getElementById('gold-table-body');
+            
+            function getVal(carat) {
+                const reg = new RegExp(carat + '[^0-9]*([0-9]{4,5})', 'i');
+                const m = text.match(reg);
+                return m ? m[1] : '-';
+            }
+
+            const p24 = getVal('24');
+            const p21 = getVal('21');
+            const p18 = getVal('18');
+
+            if (tbody) {
+                tbody.innerHTML = 
+                    '<tr><td>24</td><td class="buy-price">' + p24 + '</td><td class="sell-price">' + p24 + '</td></tr>' +
+                    '<tr><td>21</td><td class="buy-price">' + p21 + '</td><td class="sell-price">' + p21 + '</td></tr>' +
+                    '<tr><td>18</td><td class="buy-price">' + p18 + '</td><td class="sell-price">' + p18 + '</td></tr>';
+            }
         }
 
-        // تشغيل الجلب فور فتح الصفحة
-        fetchPrices();
-
-        // إعادة الجلب تلقائياً كل 30 ثانية
-        setInterval(fetchPrices, 30000);
+        fetchTelegramPrices();
+        setInterval(fetchTelegramPrices, 60000);
     </script>
-</body>
-</html>
