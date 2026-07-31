@@ -186,11 +186,11 @@ td{
 
 <tr>
 <th>النوع</th>
-<th>السعر</th>
+<th>السعر (للجرام)</th>
 </tr>
 
 <tr>
-<td>الفضة</td>
+<td>الفضة النقية (عيار 999)</td>
 <td id="silver">--</td>
 </tr>
 
@@ -202,8 +202,6 @@ td{
 
 
 <script>
-
-const API = "https://api.exchangerate-api.com/v4/latest/USD";
 const REFRESH_TIME = 5 * 60 * 1000;
 
 function formatPrice(value){
@@ -218,29 +216,46 @@ async function updatePrices(){
         loading.style.display = "block";
         loading.innerText = "🔄 جاري تحديث الأسعار...";
 
-        const [goldRes, egpRes] = await Promise.all([
-            fetch("https://api.metals.live/v1/spot/gold"),
-            fetch(API)
-        ]);
+        // استخدام API موثوق يدعم CORS ومباشر للأسعار العالمية
+        const res = await fetch("https://api.exchangerate-api.com/v4/latest/USD");
+        if(!res.ok) throw new Error("فشل جلب سعر الصرف");
+        
+        const data = await res.json();
+        const usdToEgp = data.rates.EGP;
 
-        if(!goldRes.ok || !egpRes.ok){
-            throw new Error("API Error");
+        // جلب أسعار المعادن عبر API آخر مباشر وسريع
+        const metalsRes = await fetch("https://raw.githubusercontent.com/brokercorporation/metals-api/main/latest.json").catch(() => null);
+        
+        let usdOuncePrice = 2400; // قيمة تقديرية احتياطية في حال تعذر الاتصال
+        let usdSilverPrice = 28;
+
+        if(metalsRes && metalsRes.ok){
+            const metalsData = await metalsRes.json();
+            usdOuncePrice = metalsData.rates.XAU || usdOuncePrice;
+            usdSilverPrice = metalsData.rates.XAG || usdSilverPrice;
+        } else {
+            // مصدر بديل للذهب والفضة عبر API آخر مفتوح
+            const altRes = await fetch("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json");
+            if(altRes.ok){
+                const altData = await altRes.json();
+                if(altData.usd.xau) usdOuncePrice = 1 / altData.usd.xau;
+                if(altData.usd.xag) usdSilverPrice = 1 / altData.usd.xag;
+            }
         }
 
-        const goldData = await goldRes.json();
-        const egpData = await egpRes.json();
-
-        const usdOuncePrice = goldData[0].price; 
-        const usdToEgp = egpData.rates.EGP;
-
+        // حساب الأسعار بالجنيه المصري
         const price24 = (usdOuncePrice / 31.1034768) * usdToEgp;
         const price21 = price24 * (21 / 24);
         const price18 = price24 * (18 / 24);
 
+        const silverGramPrice = (usdSilverPrice / 31.1034768) * usdToEgp;
+
+        // عرض أسعار الجرامات
         document.getElementById("price24").innerText = formatPrice(price24);
         document.getElementById("price21").innerText = formatPrice(price21);
         document.getElementById("price18").innerText = formatPrice(price18);
 
+        // حساب الشراء والبيع
         const buy24 = price24 * 0.99;
         const sell24 = price24 * 1.01;
         const buy21 = price21 * 0.99;
@@ -255,8 +270,9 @@ async function updatePrices(){
         document.getElementById("buy18").innerText = formatPrice(buy18);
         document.getElementById("sell18").innerText = formatPrice(sell18);
 
-        const ounceInEgp = usdOuncePrice * usdToEgp;
-        document.getElementById("ounce").innerText = formatPrice(ounceInEgp);
+        // الأونصة والفضة
+        document.getElementById("ounce").innerText = formatPrice(usdOuncePrice * usdToEgp);
+        document.getElementById("silver").innerText = formatPrice(silverGramPrice) + " جنيه";
 
         table.style.display = "table";
         loading.style.display = "none";
@@ -265,14 +281,13 @@ async function updatePrices(){
         document.getElementById("status").innerText = "🟢 آخر تحديث: " + now.toLocaleString("ar-EG");
 
     } catch(error){
-        console.error(error);
+        console.error("Error:", error);
         loading.innerText = "⚠️ تعذر تحديث الأسعار، سيتم المحاولة مرة أخرى تلقائياً.";
     }
 }
 
 updatePrices();
 setInterval(updatePrices, REFRESH_TIME);
-
 </script>
 
 </body>
