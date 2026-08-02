@@ -1,9 +1,13 @@
 {
   "currency": "EGP",
-  "timestamp": null,
-  "price_gram_24k": null,
-  "price_gram_21k": null,
-  "price_gram_18k": null,
-  "silver_egp_per_gram": null,
-  "fetched_at": null
+  "timestamp": "2026-08-02T22:13:28.269590+00:00",
+  "usd_to_egp": 51.123173,
+  "price_gram_24k": 6701.74,
+  "price_gram_22k": 6142.96,
+  "price_gram_21k": 5863.83,
+  "price_gram_20k": 5584.7,
+  "price_gram_18k": 5026.43,
+  "price_gram_16k": 4467.65,
+  "price_gram_14k": 3909.39,
+  "price_gram_10k": 2792.35
 }
