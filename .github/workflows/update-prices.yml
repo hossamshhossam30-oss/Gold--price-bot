@@ -16,9 +16,59 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Get gold prices
+      - name: Get gold prices in USD
         run: |
-          curl -fsSL "https://api.goldprice.dev/v1/carat?currency=EGP" -o prices.json
+          curl -fsSL "https://api.goldprice.dev/v1/carat?currency=USD" -o gold.json
+
+      - name: Get USD to EGP exchange rate
+        run: |
+          curl -fsSL "https://open.er-api.com/v6/latest/USD" -o fx.json
+
+      - name: Convert prices to EGP
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+
+          with open("gold.json", encoding="utf-8") as f:
+              gold = json.load(f)
+
+          with open("fx.json", encoding="utf-8") as f:
+              fx = json.load(f)
+
+          egp_rate = fx["rates"]["EGP"]
+
+          prices = {
+              "currency": "EGP",
+              "timestamp": datetime.now(timezone.utc).isoformat(),
+              "usd_to_egp": egp_rate
+          }
+
+          for key in [
+              "price_gram_24k",
+              "price_gram_22k",
+              "price_gram_21k",
+              "price_gram_20k",
+              "price_gram_18k",
+              "price_gram_16k",
+              "price_gram_14k",
+              "price_gram_10k"
+          ]:
+              if key not in gold:
+                  raise SystemExit(f"Missing gold price: {key}")
+
+              prices[key] = round(float(gold[key]) * egp_rate, 2)
+
+          with open("prices.json", "w", encoding="utf-8") as f:
+              json.dump(prices, f, ensure_ascii=False, indent=2)
+
+          print("أسعار الذهب بالجنيه المصري:")
+          print("24K:", prices["price_gram_24k"])
+          print("22K:", prices["price_gram_22k"])
+          print("21K:", prices["price_gram_21k"])
+          print("18K:", prices["price_gram_18k"])
+          print("سعر الدولار:", egp_rate)
+          PY
 
       - name: Check data
         run: |
@@ -30,18 +80,27 @@ jobs:
 
           for key in ["price_gram_24k", "price_gram_21k", "price_gram_18k"]:
               if key not in data:
-                  raise SystemExit(f"Missing: {key}")
+                  raise SystemExit(f"Missing key: {key}")
 
-          print("Prices OK")
-          print("24K:", data["price_gram_24k"])
-          print("21K:", data["price_gram_21k"])
-          print("18K:", data["price_gram_18k"])
+              if not isinstance(data[key], (int, float)):
+                  raise SystemExit(f"Invalid value: {key}")
+
+          print("البيانات صحيحة")
+          print("24K:", data["price_gram_24k"], "جنيه")
+          print("21K:", data["price_gram_21k"], "جنيه")
+          print("18K:", data["price_gram_18k"], "جنيه")
           PY
 
       - name: Commit updated prices
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add prices.json
-          git diff --cached --quiet || git commit -m "Update gold prices"
-          git push
+
+          if git diff --cached --quiet; then
+            echo "لا توجد تغييرات في الأسعار"
+          else
+            git commit -m "Update gold prices"
+            git push
+          fi
