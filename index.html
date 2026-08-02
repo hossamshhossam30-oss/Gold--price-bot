@@ -1,73 +1,82 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسعار الذهب</title>
-    <style>
-        body {
-            font-family: system-ui, -apple-system, sans-serif;
-            padding: 20px;
-            background-color: #f9f9f9;
-            text-align: center;
-        }
-        .price-card {
-            background: #fff;
-            padding: 15px;
-            margin: 10px auto;
-            max-width: 300px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .price-val {
-            font-weight: bold;
-            color: #d4af37;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>أسعار الذهب والفضة الآن</title>
+<style>
+body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#111;color:#fff}
+header{background:linear-gradient(45deg,#d4af37,#ffd700);color:#000;text-align:center;padding:20px;font-size:28px;font-weight:bold}
+.container{width:95%;max-width:900px;margin:auto;padding:15px}
+.card{background:#222;border-radius:15px;padding:15px;margin-bottom:20px;box-shadow:0 0 10px rgba(255,215,0,.4)}
+h2{text-align:center;color:gold}
+table{width:100%;border-collapse:collapse;text-align:center}th{background:gold;color:#000;padding:10px}td{padding:10px;border-bottom:1px solid #444}
+.buy{color:#00ff66;font-weight:bold}.sell{color:#ff4444;font-weight:bold}
+.info{text-align:center;font-size:18px;margin-top:15px;line-height:2}.status{text-align:center;margin-top:15px;color:#ccc;font-size:14px;line-height:1.8}
+.loading{text-align:center;color:gold;padding:15px}.error{text-align:center;color:#ff5555;padding:15px}
+.actions{text-align:center;margin:12px 0}.btn{border:0;border-radius:10px;padding:11px 18px;background:gold;color:#111;font-weight:bold;cursor:pointer}.btn:disabled{opacity:.6;cursor:wait}
+.source{text-align:center;font-size:12px;color:#aaa;margin-top:8px}
+</style>
 </head>
 <body>
-
-    <h2>أسعار الذهب المباشرة</h2>
-
-    <div class="price-card">
-        <div>سعر الشراء (عيار 24): <span id="buy24" class="price-val">جاري التحميل...</span> ج.م</div>
-    </div>
-
-    <div class="price-card">
-        <div>سعر البيع (عيار 24): <span id="sell24" class="price-val">جاري التحميل...</span> ج.م</div>
-    </div>
-
-    <p><small>آخر تحديث: <span id="last-update">--:--:--</span></small></p>
-
-    <!-- هنا التعديل المهم: الكود المرجعي يجب أن يكون داخل وسم script -->
-    <script>
-        async function updatePrices() {
-            try {
-                // 1. جلب سعر الدولار
-                const response = await fetch('https://open.er-api.com/v6/latest/USD');
-                const data = await response.json();
-                const usdToEgp = data.rates.EGP;
-
-                // 2. حساب سعر عيار 24 (افتراضي)
-                const goldOunceUSD = 2400; 
-                const price24 = Math.round((goldOunceUSD / 31.1034768) * usdToEgp);
-
-                // 3. عرض الأرقام في الصفحة
-                document.getElementById('buy24').textContent = price24.toLocaleString('ar-EG');
-                document.getElementById('sell24').textContent = Math.round(price24 * 1.02).toLocaleString('ar-EG');
-                document.getElementById('last-update').textContent = new Date().toLocaleTimeString('ar-EG');
-
-            } catch (error) {
-                console.error('خطأ في جلب البيانات:', error);
-                document.getElementById('buy24').textContent = 'خطأ في الاتصال';
-            }
-        }
-
-        // تشغيل الدالة فور فتح الصفحة
-        updatePrices();
-
-        // إعادة التحديث كل 30 ثانية
-        setInterval(updatePrices, 30000);
-    </script>
+<header>🪙 أسعار الذهب والفضة الآن 🪙</header>
+<div class="container">
+<div class="card">
+<h2>🥇 أسعار الذهب</h2>
+<div id="loading" class="loading">جاري تحميل الأسعار...</div>
+<div class="actions"><button id="refreshBtn" class="btn">🔄 تحديث الآن</button></div>
+<table id="goldTable" style="display:none"><tr><th>العيار</th><th>شراء تقديري</th><th>بيع تقديري</th></tr>
+<tr><td>24</td><td id="buy24" class="buy">--</td><td id="sell24" class="sell">--</td></tr>
+<tr><td>21</td><td id="buy21" class="buy">--</td><td id="sell21" class="sell">--</td></tr>
+<tr><td>18</td><td id="buy18" class="buy">--</td><td id="sell18" class="sell">--</td></tr></table>
+<div class="info">💰 سعر الجرام عيار 24: <b id="price24">--</b> جنيه<br>💰 سعر الجرام عيار 21: <b id="price21">--</b> جنيه<br>💰 سعر الجرام عيار 18: <b id="price18">--</b> جنيه</div>
+<div id="status" class="status">آخر تحديث: --</div>
+<div class="source">المصدر: goldprice.dev — سعر المعدن الخام وليس عرض محل صاغة.</div>
+</div>
+<div class="card"><h2>🪙 أسعار الأونصة</h2><div class="info">سعر أونصة الذهب: <b id="ounce">--</b> جنيه</div></div>
+<div class="card"><h2>🥈 أسعار الفضة</h2><table><tr><th>النوع</th><th>السعر</th></tr><tr><td>الفضة</td><td id="silver">--</td></tr></table><div id="silverNote" class="source"></div></div>
+</div>
+<script>
+const API='https://api.goldprice.dev/v1/carat?currency=EGP';
+const LOCAL_API='./data/prices.json';
+const REFRESH_TIME=10*60*1000;
+const CACHE_KEY='gold_prices_cache_v2';
+function formatPrice(v){return Math.round(Number(v)).toLocaleString('ar-EG')}
+function validGold(d){return d && Number(d.price_gram_24k)>0 && Number(d.price_gram_21k)>0 && Number(d.price_gram_18k)>0}
+function saveCache(data){try{localStorage.setItem(CACHE_KEY,JSON.stringify(data))}catch(e){}}
+function readCache(){try{return JSON.parse(localStorage.getItem(CACHE_KEY)||'null')}catch(e){return null}}
+function render(data, source){
+ const p24=Number(data.price_gram_24k),p21=Number(data.price_gram_21k),p18=Number(data.price_gram_18k);
+ document.getElementById('price24').textContent=formatPrice(p24);document.getElementById('price21').textContent=formatPrice(p21);document.getElementById('price18').textContent=formatPrice(p18);
+ [[24,p24],[21,p21],[18,p18]].forEach(([k,p])=>{document.getElementById('buy'+k).textContent=formatPrice(p*.99);document.getElementById('sell'+k).textContent=formatPrice(p*1.01)});
+ document.getElementById('ounce').textContent=formatPrice(p24*31.1034768);
+ document.getElementById('goldTable').style.display='table';document.getElementById('loading').style.display='none';
+ const ts=data.timestamp||data.updated_at||data.fetched_at||new Date().toISOString();
+ const date=new Date(ts);const label=isNaN(date)?'غير معروف':date.toLocaleString('ar-EG');
+ document.getElementById('status').textContent='🟢 آخر سعر ناجح: '+label+' — المصدر: '+source;
+ if(data.silver_egp_per_gram>0){document.getElementById('silver').textContent=formatPrice(data.silver_egp_per_gram)+' جنيه';document.getElementById('silverNote').textContent='الفضة متاحة إذا نجح مصدر XAG؛ وإلا ستبقى آخر قيمة محفوظة.'}
+ saveCache({...data,fetched_at:new Date().toISOString()});
+}
+async function fetchJson(url, timeout=15000){const c=new AbortController();const t=setTimeout(()=>c.abort(),timeout);try{const r=await fetch(url,{cache:'no-store',headers:{Accept:'application/json'}});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}finally{clearTimeout(t)}}
+async function updatePrices(){
+ const btn=document.getElementById('refreshBtn'),loading=document.getElementById('loading');btn.disabled=true;loading.style.display='block';loading.textContent='🔄 جاري تحديث الأسعار...';
+ try{
+   // 1) GitHub Actions snapshot: avoids browser CORS/rate-limit problems.
+   let data=null;
+   try{data=await fetchJson(LOCAL_API+'?t='+Date.now(),10000)}catch(e){console.warn('local snapshot unavailable',e)}
+   if(validGold(data)){render(data,'GitHub Actions / snapshot');return}
+   // 2) Direct API fallback for immediate/manual refresh.
+   data=await fetchJson(API,15000);
+   if(!validGold(data))throw new Error('Invalid gold response');
+   render(data,'goldprice.dev مباشر');
+ }catch(e){
+   console.error(e);const cached=readCache();
+   if(validGold(cached)){render(cached,'آخر بيانات محفوظة');document.getElementById('status').textContent+=' ⚠️ تعذر جلب تحديث جديد الآن.'}
+   else {loading.textContent='⚠️ تعذر الحصول على الأسعار. جرّب تحديث الآن بعد قليل.';document.getElementById('status').textContent='حالة الاتصال: فشل تحديث المصدر'}
+ }finally{btn.disabled=false}
+}
+document.getElementById('refreshBtn').addEventListener('click',updatePrices);
+updatePrices();setInterval(updatePrices,REFRESH_TIME);
+</script>
 </body>
 </html>
