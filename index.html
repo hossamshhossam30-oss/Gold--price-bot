@@ -66,7 +66,7 @@ async function updatePrices(){
    try{data=await fetchJson(LOCAL_API+'?t='+Date.now(),10000)}catch(e){console.warn('local snapshot unavailable',e)}
    if(validGold(data)){render(data,'GitHub Actions / snapshot');return}
    // 2) Direct API fallback for immediate/manual refresh.
-//   data=await fetchJson(API,15000);
+   data=await fetchJson(API,15000);
    if(!validGold(data))throw new Error('Invalid gold response');
    render(data,'goldprice.dev مباشر');
  }catch(e){
