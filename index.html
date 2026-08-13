@@ -1,82 +1,60 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>أسعار الذهب والفضة الآن</title>
-<style>
-body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#111;color:#fff}
-header{background:linear-gradient(45deg,#d4af37,#ffd700);color:#000;text-align:center;padding:20px;font-size:28px;font-weight:bold}
-.container{width:95%;max-width:900px;margin:auto;padding:15px}
-.card{background:#222;border-radius:15px;padding:15px;margin-bottom:20px;box-shadow:0 0 10px rgba(255,215,0,.4)}
-h2{text-align:center;color:gold}
-table{width:100%;border-collapse:collapse;text-align:center}th{background:gold;color:#000;padding:10px}td{padding:10px;border-bottom:1px solid #444}
-.buy{color:#00ff66;font-weight:bold}.sell{color:#ff4444;font-weight:bold}
-.info{text-align:center;font-size:18px;margin-top:15px;line-height:2}.status{text-align:center;margin-top:15px;color:#ccc;font-size:14px;line-height:1.8}
-.loading{text-align:center;color:gold;padding:15px}.error{text-align:center;color:#ff5555;padding:15px}
-.actions{text-align:center;margin:12px 0}.btn{border:0;border-radius:10px;padding:11px 18px;background:gold;color:#111;font-weight:bold;cursor:pointer}.btn:disabled{opacity:.6;cursor:wait}
-.source{text-align:center;font-size:12px;color:#aaa;margin-top:8px}
-</style>
-</head>
-<body>
-<header>🪙 أسعار الذهب والفضة الآن 🪙</header>
-<div class="container">
-<div class="card">
-<h2>🥇 أسعار الذهب</h2>
-<div id="loading" class="loading">جاري تحميل الأسعار...</div>
-<div class="actions"><button id="refreshBtn" class="btn">🔄 تحديث الآن</button></div>
-<table id="goldTable" style="display:none"><tr><th>العيار</th><th>شراء تقديري</th><th>بيع تقديري</th></tr>
-<tr><td>24</td><td id="buy24" class="buy">--</td><td id="sell24" class="sell">--</td></tr>
-<tr><td>21</td><td id="buy21" class="buy">--</td><td id="sell21" class="sell">--</td></tr>
-<tr><td>18</td><td id="buy18" class="buy">--</td><td id="sell18" class="sell">--</td></tr></table>
-<div class="info">💰 سعر الجرام عيار 24: <b id="price24">--</b> جنيه<br>💰 سعر الجرام عيار 21: <b id="price21">--</b> جنيه<br>💰 سعر الجرام عيار 18: <b id="price18">--</b> جنيه</div>
-<div id="status" class="status">آخر تحديث: --</div>
-<div class="source">المصدر: goldprice.dev — سعر المعدن الخام وليس عرض محل صاغة.</div>
-</div>
-<div class="card"><h2>🪙 أسعار الأونصة</h2><div class="info">سعر أونصة الذهب: <b id="ounce">--</b> جنيه</div></div>
-<div class="card"><h2>🥈 أسعار الفضة</h2><table><tr><th>النوع</th><th>السعر</th></tr><tr><td>الفضة</td><td id="silver">--</td></tr></table><div id="silverNote" class="source"></div></div>
-</div>
-<script>
-const API='https://api.goldprice.dev/v1/carat?currency=EGP';
-const LOCAL_API='./prices.json';
-const REFRESH_TIME=10*60*1000;
-const CACHE_KEY='gold_prices_cache_v2';
-function formatPrice(v){return Math.round(Number(v)).toLocaleString('ar-EG')}
-function validGold(d){return d && Number(d.price_gram_24k)>0 && Number(d.price_gram_21k)>0 && Number(d.price_gram_18k)>0}
-function saveCache(data){try{localStorage.setItem(CACHE_KEY,JSON.stringify(data))}catch(e){}}
-function readCache(){try{return JSON.parse(localStorage.getItem(CACHE_KEY)||'null')}catch(e){return null}}
-function render(data, source){
- const p24=Number(data.price_gram_24k),p21=Number(data.price_gram_21k),p18=Number(data.price_gram_18k);
- document.getElementById('price24').textContent=formatPrice(p24);document.getElementById('price21').textContent=formatPrice(p21);document.getElementById('price18').textContent=formatPrice(p18);
- [[24,p24],[21,p21],[18,p18]].forEach(([k,p])=>{document.getElementById('buy'+k).textContent=formatPrice(p*.99);document.getElementById('sell'+k).textContent=formatPrice(p*1.01)});
- document.getElementById('ounce').textContent=formatPrice(p24*31.1034768);
- document.getElementById('goldTable').style.display='table';document.getElementById('loading').style.display='none';
- const ts=data.timestamp||data.updated_at||data.fetched_at||new Date().toISOString();
- const date=new Date(ts);const label=isNaN(date)?'غير معروف':date.toLocaleString('ar-EG');
- document.getElementById('status').textContent='🟢 آخر سعر ناجح: '+label+' — المصدر: '+source;
- if(data.silver_egp_per_gram>0){document.getElementById('silver').textContent=formatPrice(data.silver_egp_per_gram)+' جنيه';document.getElementById('silverNote').textContent='الفضة متاحة إذا نجح مصدر XAG؛ وإلا ستبقى آخر قيمة محفوظة.'}
- saveCache({...data,fetched_at:new Date().toISOString()});
-}
-async function fetchJson(url, timeout=15000){const c=new AbortController();const t=setTimeout(()=>c.abort(),timeout);try{const r=await fetch(url,{cache:'no-store',headers:{Accept:'application/json'}});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}finally{clearTimeout(t)}}
-async function updatePrices(){
- const btn=document.getElementById('refreshBtn'),loading=document.getElementById('loading');btn.disabled=true;loading.style.display='block';loading.textContent='🔄 جاري تحديث الأسعار...';
- try{
-   // 1) GitHub Actions snapshot: avoids browser CORS/rate-limit problems.
-   let data=null;
-   try{data=await fetchJson(LOCAL_API+'?t='+Date.now(),10000)}catch(e){console.warn('local snapshot unavailable',e)}
-   if(validGold(data)){render(data,'GitHub Actions / snapshot');return}
-   // 2) Direct API fallback for immediate/manual refresh.
-//   data=await fetchJson(API,15000);
-   if(!validGold(data))throw new Error('Invalid gold response');
-   render(data,'goldprice.dev مباشر');
- }catch(e){
-   console.error(e);const cached=readCache();
-   if(validGold(cached)){render(cached,'آخر بيانات محفوظة');document.getElementById('status').textContent+=' ⚠️ تعذر جلب تحديث جديد الآن.'}
-   else {loading.textContent='⚠️ تعذر الحصول على الأسعار. جرّب تحديث الآن بعد قليل.';document.getElementById('status').textContent='حالة الاتصال: فشل تحديث المصدر'}
- }finally{btn.disabled=false}
-}
-document.getElementById('refreshBtn').addEventListener('click',updatePrices);
-updatePrices();setInterval(updatePrices,REFRESH_TIME);
-</script>
-</body>
-</html>
+import re
+import json
+import requests
+from bs4 import BeautifulSoup
+
+def fetch_telegram_prices():
+    # رابط الصفحة العامة للقناة
+    url = "https://t.me/s/goldpricenowlive"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+    
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        raise Exception("فشل الاتصال بقناة التليجرام")
+        
+    soup = BeautifulSoup(response.text, 'html.parser')
+    messages = soup.find_all('div', class_='tgme_widget_message_text')
+    
+    if not messages:
+        raise Exception("لم يتم العثور على رسائل في القناة")
+        
+    # قراءة أحدث رسالة تحتوي على أسعار
+    latest_text = ""
+    for msg in reversed(messages):
+        text = msg.get_text()
+        if "21" in text or "عيار" in text:
+            latest_text = text
+            break
+
+    # استخراج الأرقام فقط
+    def extract_number(pattern, text):
+        match = re.search(pattern, text)
+        if match:
+            num_str = match.group(1).replace(',', '').replace('،', '')
+            return float(num_str)
+        return 0.0
+
+    # استخراج الأسعار من نص القناة
+    price_24 = extract_number(r'(?:عيار\s*24|24)\s*[\:\-]\s*([\d,،]+)', latest_text)
+    price_21 = extract_number(r'(?:عيار\s*21|21)\s*[\:\-]\s*([\d,،]+)', latest_text)
+    price_18 = extract_number(r'(?:عيار\s*18|18)\s*[\:\-]\s*([\d,،]+)', latest_text)
+    price_oz = extract_number(r'(?:الأونصة|أونصة|الأنصة)\s*[\:\-]\s*([\d,،]+)', latest_text)
+
+    # حفظ الأرقام فقط داخل JSON
+    data = {
+        "gold": {
+            "24": price_24,
+            "21": price_21,
+            "18": price_18,
+            "oz": price_oz
+        },
+        "source": "Telegram / goldpricenowlive"
+    }
+    
+    with open("prices.json", "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+if __name__ == "__main__":
+    fetch_telegram_prices()
