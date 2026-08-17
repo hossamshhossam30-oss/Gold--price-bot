@@ -1,13 +1,13 @@
 {
   "currency": "EGP",
-  "timestamp": "2026-08-17T10:06:33.507935+00:00",
+  "timestamp": "2026-08-17T11:03:29.400654+00:00",
   "usd_to_egp": 50.257428,
-  "price_gram_24k": 7100.37,
-  "price_gram_22k": 6508.34,
-  "price_gram_21k": 6212.82,
-  "price_gram_20k": 5916.81,
-  "price_gram_18k": 5325.28,
-  "price_gram_16k": 4733.24,
-  "price_gram_14k": 4141.71,
-  "price_gram_10k": 2958.65
+  "price_gram_24k": 7108.41,
+  "price_gram_22k": 6515.88,
+  "price_gram_21k": 6219.86,
+  "price_gram_20k": 5923.34,
+  "price_gram_18k": 5331.31,
+  "price_gram_16k": 4738.77,
+  "price_gram_14k": 4146.24,
+  "price_gram_10k": 2961.67
 }
