@@ -1,106 +1,59 @@
-name: Update gold prices
+import json
+import re
+from urllib.request import Request, urlopen
+from bs4 import BeautifulSoup
 
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: "*/10 * * * *"
+URL = "https://t.me/s/goldpricenowlive"
 
-permissions:
-  contents: write
+def fetch_gold_prices():
+    req = Request(URL, headers={'User-Agent': 'Mozilla/5.0'})
+    html = urlopen(req).read().decode('utf-8')
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    # جلب جميع النصوص من القناة
+    messages = soup.find_all('div', class_='tgme_widget_message_text')
+    if not messages:
+        print("لم يتم العثور على رسائل")
+        return
 
-jobs:
-  update:
-    runs-on: ubuntu-latest
+    # البحث عن آخر رسالة تحتوي على أسعار الذهب
+    last_msg = ""
+    for msg in reversed(messages):
+        text = msg.get_text(separator="\n")
+        if "اسعار الذهب الان" in text or "عيار 21" in text:
+            last_msg = text
+            break
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    if not last_msg:
+        print("لم يتم العثور على منشور يحتوي على أسعار الذهب")
+        return
 
-      - name: Get gold prices in USD
-        run: |
-          curl -fsSL "https://api.goldprice.dev/v1/carat?currency=USD" -o gold.json
+    print("--- نص الرسالة المستخرجة ---")
+    print(last_msg)
 
-      - name: Get USD to EGP exchange rate
-        run: |
-          curl -fsSL "https://open.er-api.com/v6/latest/USD" -o fx.json
+    # استخراج القيم باستخدام Regex المتوافق مع تنسيق المنشور
+    data = {
+        "gold_18": extract_value(r"عيار\s*18\D*?(\d[\d,.]*)", last_msg),
+        "gold_21": extract_value(r"عيار\s*21\D*?(\d[\d,.]*)", last_msg),
+        "gold_24": extract_value(r"عيار\s*24\D*?(\d[\d,.]*)", last_msg),
+        "gold_pound": extract_value(r"جنيه\s*الذهب\D*?(\d[\d,.]*)", last_msg),
+        "ounce_usd": extract_value(r"الأونصة\s*بالدولار\D*?(\d[\d,.]*)", last_msg),
+        "buy_price": extract_value(r"سعر\s*الشراء\D*?(\d[\d,.]*)", last_msg),
+        "sell_price": extract_value(r"سعر\s*البيع\D*?(\d[\d,.]*)", last_msg),
+        "usd_rate": extract_value(r"سعر\s*الدولار\D*?(\d[\d,.]*)", last_msg),
+        "sagha_usd": extract_value(r"دولار\s*الصاغة\D*?(\d[\d,.]*)", last_msg)
+    }
 
-      - name: Convert prices to EGP
-        run: |
-          python - <<'PY'
-          import json
-          from datetime import datetime, timezone
+    # حفظ البيانات في ملف prices.json
+    with open("prices.json", "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+        print("\nتم تحديث ملف prices.json بنجاح!")
 
-          with open("gold.json", encoding="utf-8") as f:
-              gold = json.load(f)
+def extract_value(pattern, text):
+    match = re.search(pattern, text)
+    if match:
+        return match.group(1).replace(",", "").strip()
+    return "N/A"
 
-          with open("fx.json", encoding="utf-8") as f:
-              fx = json.load(f)
-
-          egp_rate = fx["rates"]["EGP"]
-
-          prices = {
-              "currency": "EGP",
-              "timestamp": datetime.now(timezone.utc).isoformat(),
-              "usd_to_egp": egp_rate
-          }
-
-          for key in [
-              "price_gram_24k",
-              "price_gram_22k",
-              "price_gram_21k",
-              "price_gram_20k",
-              "price_gram_18k",
-              "price_gram_16k",
-              "price_gram_14k",
-              "price_gram_10k"
-          ]:
-              if key not in gold:
-                  raise SystemExit(f"Missing gold price: {key}")
-
-              prices[key] = round(float(gold[key]) * egp_rate, 2)
-
-          with open("prices.json", "w", encoding="utf-8") as f:
-              json.dump(prices, f, ensure_ascii=False, indent=2)
-
-          print("أسعار الذهب بالجنيه المصري:")
-          print("24K:", prices["price_gram_24k"])
-          print("22K:", prices["price_gram_22k"])
-          print("21K:", prices["price_gram_21k"])
-          print("18K:", prices["price_gram_18k"])
-          print("سعر الدولار:", egp_rate)
-          PY
-
-      - name: Check data
-        run: |
-          python - <<'PY'
-          import json
-
-          with open("prices.json", encoding="utf-8") as f:
-              data = json.load(f)
-
-          for key in ["price_gram_24k", "price_gram_21k", "price_gram_18k"]:
-              if key not in data:
-                  raise SystemExit(f"Missing key: {key}")
-
-              if not isinstance(data[key], (int, float)):
-                  raise SystemExit(f"Invalid value: {key}")
-
-          print("البيانات صحيحة")
-          print("24K:", data["price_gram_24k"], "جنيه")
-          print("21K:", data["price_gram_21k"], "جنيه")
-          print("18K:", data["price_gram_18k"], "جنيه")
-          PY
-
-      - name: Commit updated prices
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add prices.json
-
-          if git diff --cached --quiet; then
-            echo "لا توجد تغييرات في الأسعار"
-          else
-            git commit -m "Update gold prices"
-            git push
-          fi
+if __name__ == "__main__":
+    fetch_gold_prices()
