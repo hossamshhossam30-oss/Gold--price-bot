@@ -1,13 +1,11 @@
 {
-  "currency": "EGP",
-  "timestamp": "2026-08-19T19:59:40.415214+00:00",
-  "usd_to_egp": 50.518369,
-  "price_gram_24k": 7324.66,
-  "price_gram_22k": 6714.4,
-  "price_gram_21k": 6408.76,
-  "price_gram_20k": 6103.63,
-  "price_gram_18k": 5493.37,
-  "price_gram_16k": 4883.11,
-  "price_gram_14k": 4272.84,
-  "price_gram_10k": 3051.81
+  "price_gram_24k": 7314,
+  "price_gram_21k": 6400,
+  "price_gram_18k": 5486,
+  "gold_pound": 51200,
+  "ounce_usd": 4521,
+  "buy_price": 6400,
+  "sell_price": 6370,
+  "usd_to_egp": 50.77,
+  "sagha_usd": 50.32
 }
