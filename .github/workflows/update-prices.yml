@@ -1,59 +1,114 @@
-import json
-import re
-from urllib.request import Request, urlopen
-from bs4 import BeautifulSoup
+name: Update gold prices
 
-URL = "https://t.me/s/goldpricenowlive"
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/10 * * * *"
 
-def fetch_gold_prices():
-    req = Request(URL, headers={'User-Agent': 'Mozilla/5.0'})
-    html = urlopen(req).read().decode('utf-8')
-    soup = BeautifulSoup(html, 'html.parser')
-    
-    # جلب جميع النصوص من القناة
-    messages = soup.find_all('div', class_='tgme_widget_message_text')
-    if not messages:
-        print("لم يتم العثور على رسائل")
-        return
+permissions:
+  contents: write
 
-    # البحث عن آخر رسالة تحتوي على أسعار الذهب
-    last_msg = ""
-    for msg in reversed(messages):
-        text = msg.get_text(separator="\n")
-        if "اسعار الذهب الان" in text or "عيار 21" in text:
-            last_msg = text
-            break
+jobs:
+  update:
+    runs-on: ubuntu-latest
 
-    if not last_msg:
-        print("لم يتم العثور على منشور يحتوي على أسعار الذهب")
-        return
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    print("--- نص الرسالة المستخرجة ---")
-    print(last_msg)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
 
-    # استخراج القيم باستخدام Regex المتوافق مع تنسيق المنشور
-    data = {
-        "gold_18": extract_value(r"عيار\s*18\D*?(\d[\d,.]*)", last_msg),
-        "gold_21": extract_value(r"عيار\s*21\D*?(\d[\d,.]*)", last_msg),
-        "gold_24": extract_value(r"عيار\s*24\D*?(\d[\d,.]*)", last_msg),
-        "gold_pound": extract_value(r"جنيه\s*الذهب\D*?(\d[\d,.]*)", last_msg),
-        "ounce_usd": extract_value(r"الأونصة\s*بالدولار\D*?(\d[\d,.]*)", last_msg),
-        "buy_price": extract_value(r"سعر\s*الشراء\D*?(\d[\d,.]*)", last_msg),
-        "sell_price": extract_value(r"سعر\s*البيع\D*?(\d[\d,.]*)", last_msg),
-        "usd_rate": extract_value(r"سعر\s*الدولار\D*?(\d[\d,.]*)", last_msg),
-        "sagha_usd": extract_value(r"دولار\s*الصاغة\D*?(\d[\d,.]*)", last_msg)
-    }
+      - name: Install dependencies
+        run: |
+          pip install beautifulsoup4 requests
 
-    # حفظ البيانات في ملف prices.json
-    with open("prices.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
-        print("\nتم تحديث ملف prices.json بنجاح!")
+      - name: Fetch gold prices from Telegram
+        run: |
+          python - <<'PY'
+          import json
+          import re
+          import requests
+          from bs4 import BeautifulSoup
 
-def extract_value(pattern, text):
-    match = re.search(pattern, text)
-    if match:
-        return match.group(1).replace(",", "").strip()
-    return "N/A"
+          URL = "https://t.me/s/goldpricenowlive"
 
-if __name__ == "__main__":
-    fetch_gold_prices()
+          headers = {'User-Agent': 'Mozilla/5.0'}
+          response = requests.get(URL, headers=headers)
+          soup = BeautifulSoup(response.text, 'html.parser')
+
+          messages = soup.find_all('div', class_='tgme_widget_message_text')
+          if not messages:
+              raise SystemExit("لم يتم العثور على رسائل بالقناة")
+
+          last_msg = ""
+          for msg in reversed(messages):
+              text = msg.get_text(separator="\n")
+              if "عيار 21" in text or "اسعار الذهب" in text:
+                  last_msg = text
+                  break
+
+          if not last_msg:
+              raise SystemExit("لم يتم العثور على رسالة تحتوي على الأسعار")
+
+          def extract_val(pattern, text):
+              match = re.search(pattern, text)
+              if match:
+                  val = match.group(1).replace(",", "").strip()
+                  try:
+                      return float(val) if '.' in val else int(val)
+                  except ValueError:
+                      return val
+              return "N/A"
+
+          prices = {
+              "price_gram_24k": extract_val(r"عيار\s*24\D*?(\d[\d,.]*)", last_msg),
+              "price_gram_21k": extract_val(r"عيار\s*21\D*?(\d[\d,.]*)", last_msg),
+              "price_gram_18k": extract_val(r"عيار\s*18\D*?(\d[\d,.]*)", last_msg),
+              "gold_pound": extract_val(r"جنيه\s*الذهب\D*?(\d[\d,.]*)", last_msg),
+              "ounce_usd": extract_val(r"الأونصة\s*بالدولار\D*?(\d[\d,.]*)", last_msg),
+              "buy_price": extract_val(r"سعر\s*الشراء\D*?(\d[\d,.]*)", last_msg),
+              "sell_price": extract_val(r"سعر\s*البيع\D*?(\d[\d,.]*)", last_msg),
+              "usd_to_egp": extract_val(r"سعر\s*الدولار\D*?(\d[\d,.]*)", last_msg),
+              "sagha_usd": extract_val(r"دولار\s*الصاغة\D*?(\d[\d,.]*)", last_msg)
+          }
+
+          with open("prices.json", "w", encoding="utf-8") as f:
+              json.dump(prices, f, ensure_ascii=False, indent=2)
+
+          print("تم استخراج الأسعار بنجاح:")
+          print("24K:", prices["price_gram_24k"])
+          print("21K:", prices["price_gram_21k"])
+          print("18K:", prices["price_gram_18k"])
+          PY
+
+      - name: Check data
+        run: |
+          python - <<'PY'
+          import json
+
+          with open("prices.json", encoding="utf-8") as f:
+              data = json.load(f)
+
+          for key in ["price_gram_24k", "price_gram_21k", "price_gram_18k"]:
+              if key not in data or data[key] == "N/A":
+                  raise SystemExit(f"قيمة غير صالحة للمفتاح: {key}")
+
+          print("البيانات المستخرجة صحيحة وتم التحقق منها")
+          PY
+
+      - name: Commit updated prices
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add prices.json
+
+          if git diff --cached --quiet; then
+            echo "لا توجد تغييرات في الأسعار"
+          else
+            git commit -m "Update gold prices from Telegram"
+            git push
+          fi
