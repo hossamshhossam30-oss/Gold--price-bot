@@ -1,14 +1,11 @@
-data = {
-    "price_gram_24k": price_24k,
-    "price_gram_21k": price_21k,
-    "price_gram_18k": price_18k,
-    "gold_pound": gold_pound,
-    "ounce_usd": ounce_usd,
-    "buy_price": buy_price,
-    "sell_price": sell_price,
-    "usd_to_egp": usd_to_egp,
-    "sagha_usd": sagha_usd
+{
+  "price_gram_24k": 7349,
+  "price_gram_21k": 6430,
+  "price_gram_18k": 5512,
+  "gold_pound": 51440,
+  "ounce_usd": 4522,
+  "buy_price": 6430,
+  "sell_price": 6401,
+  "usd_to_egp": 51.0,
+  "sagha_usd": 50.54
 }
-
-with open("prices.json", "w", encoding="utf-8") as f:
-    json.dump(data, f, ensure_ascii=False, indent=2)
