@@ -79,13 +79,16 @@ jobs:
               "sagha_usd": extract_val(r"دولار\s*الصاغة\D*?(\d[\d,.]*)", last_msg)
           }
 
+          # 1. حفظ البيانات في ملف JSON
           with open("prices.json", "w", encoding="utf-8") as f:
               json.dump(prices, f, ensure_ascii=False, indent=2)
 
+          print("تم استخراج الأسعار بنجاح:")
           print("24K:", prices["price_gram_24k"])
           print("21K:", prices["price_gram_21k"])
           print("18K:", prices["price_gram_18k"])
 
+          # 2. إرسال منشور التحديث إلى قناتك على تلجرام
           bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
           chat_id = os.getenv("TELEGRAM_CHAT_ID")
 
@@ -109,7 +112,9 @@ jobs:
               if res.status_code == 200:
                   print("تم إرسال الرسالة للقناة بنجاح!")
               else:
-                  print(f"فشل الإرسال: {res.text}")
+                  print(f"فشل إرسال الرسالة: {res.text}")
+          else:
+              print("لم يتم العثور على مفاتيح TELEGRAM_BOT_TOKEN أو TELEGRAM_CHAT_ID")
           PY
 
       - name: Check data
