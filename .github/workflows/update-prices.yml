@@ -1,4 +1,4 @@
-name: Update gold prices
+Name: Update gold prices
 
 on:
   workflow_dispatch:
@@ -25,11 +25,15 @@ jobs:
         run: |
           pip install beautifulsoup4 requests
 
-      - name: Fetch gold prices from Telegram
+      - name: Fetch and post gold prices
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python - <<'PY'
           import json
           import re
+          import os
           import requests
           from bs4 import BeautifulSoup
 
@@ -75,6 +79,7 @@ jobs:
               "sagha_usd": extract_val(r"دولار\s*الصاغة\D*?(\d[\d,.]*)", last_msg)
           }
 
+          # 1. حفظ البيانات في ملف JSON
           with open("prices.json", "w", encoding="utf-8") as f:
               json.dump(prices, f, ensure_ascii=False, indent=2)
 
@@ -82,6 +87,34 @@ jobs:
           print("24K:", prices["price_gram_24k"])
           print("21K:", prices["price_gram_21k"])
           print("18K:", prices["price_gram_18k"])
+
+          # 2. إرسال الرسالة إلى قناتك عبر البوت
+          bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+          chat_id = os.getenv("TELEGRAM_CHAT_ID")
+
+          if bot_token and chat_id:
+              message_text = (
+                  f"🏆 <b>تحديث أسعار الذهب اليوم</b>\n\n"
+                  f"🥇 عيار 24: <b>{prices['price_gram_24k']}</b> جنيه\n"
+                  f"🥈 عيار 21: <b>{prices['price_gram_21k']}</b> جنيه\n"
+                  f"🥉 عيار 18: <b>{prices['price_gram_18k']}</b> جنيه\n"
+                  f"💰 جنيه الذهب: <b>{prices['gold_pound']}</b> جنيه\n"
+              )
+              
+              telegram_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+              payload = {
+                  "chat_id": chat_id,
+                  "text": message_text,
+                  "parse_mode": "HTML"
+              }
+              
+              res = requests.post(telegram_url, data=payload)
+              if res.status_code == 200:
+                  print("تم إرسال الرسالة للقناة بنجاح!")
+              else:
+                  print(f"فشل إرسال الرسالة: {res.text}")
+          else:
+              print("لم يتم العثور على TELEGRAM_BOT_TOKEN أو TELEGRAM_CHAT_ID في Secrets")
           PY
 
       - name: Check data
@@ -102,7 +135,7 @@ jobs:
       - name: Commit updated prices
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]"
 
           git add prices.json
 
