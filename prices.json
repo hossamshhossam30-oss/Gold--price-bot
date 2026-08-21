@@ -1,11 +1,11 @@
 {
-  "price_gram_24k": 7463,
-  "price_gram_21k": 6530,
-  "price_gram_18k": 5597,
-  "gold_pound": 52240,
-  "ounce_usd": 4602,
-  "buy_price": 6530,
-  "sell_price": 6490,
+  "price_gram_24k": 7474,
+  "price_gram_21k": 6540,
+  "price_gram_18k": 5606,
+  "gold_pound": 52320,
+  "ounce_usd": 4593,
+  "buy_price": 6540,
+  "sell_price": 6500,
   "usd_to_egp": 51.0,
-  "sagha_usd": 50.44
+  "sagha_usd": 50.61
 }
