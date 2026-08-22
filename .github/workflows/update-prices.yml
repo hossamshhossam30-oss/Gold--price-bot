@@ -1,4 +1,4 @@
-name: Update gold prices
+Name: Update gold prices
 
 on:
   workflow_dispatch:
@@ -278,7 +278,7 @@ jobs:
 
 
           # =========================================================
-          # استخراج أسعار الذهب
+          # استخراج أسعار الذهب والدولار (مُعدلة ومضمونة)
           # =========================================================
 
           price_24 = extract_value(
@@ -304,14 +304,19 @@ jobs:
               latest_message
           )
 
-
-          gold_pound = extract_value(
-              [
-                  r"جنيه\s*الذهب\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)",
-                  r"جنيه\s*ذهب\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"
-              ],
-              latest_message
-          )
+          # تم التعديل لتخطي عيار 21 إذا وجد في نفس السطر
+          gold_pound = None
+          for line in latest_message.split('\n'):
+              if 'جنيه' in line and ('الذهب' in line or 'ذهب' in line):
+                  numbers = re.findall(r'[\d٠-٩۰-۹]+', line)
+                  # تصفية الأرقام لتجاهل "21"
+                  valid_nums = [n for n in numbers if normalize_digits(n) != '21']
+                  if valid_nums:
+                      try:
+                          gold_pound = clean_number(valid_nums[0])
+                          break
+                      except ValueError:
+                          continue
 
 
           ounce_usd = extract_value(
@@ -338,13 +343,17 @@ jobs:
               latest_message
           )
 
-
-          usd_to_egp = extract_value(
-              [
-                  r"سعر\s*الدولار\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"
-              ],
-              latest_message
-          )
+          # تم التعديل لضمان عدم التقاط سعر الأونصة أو دولار الصاغة بدلاً من الدولار
+          usd_to_egp = None
+          for line in latest_message.split('\n'):
+              if 'سعر الدولار' in line and 'الأونصة' not in line and 'الصاغة' not in line:
+                  match = re.search(r'([\d٠-٩۰-۹]+[\.,٬]?[\d٠-٩۰-۹]*)', line)
+                  if match:
+                      try:
+                          usd_to_egp = clean_number(match.group(1))
+                          break
+                      except ValueError:
+                          continue
 
 
           sagha_usd = extract_value(
@@ -604,12 +613,6 @@ jobs:
 
           # =========================================================
           # إرسال المنشور إلى قناة "يوم الذهب"
-          #
-          # مهم:
-          # يتم الإرسال في كل تشغيل للـ Workflow
-          # حتى لو الأسعار لم تتغير.
-          #
-          # هذا يحافظ على سلوك البوت القديم.
           # =========================================================
 
           bot_token = os.getenv(
@@ -637,15 +640,25 @@ jobs:
 
           message_text = (
 
-              "🏆 <b>تحديث أسعار الذهب اليوم</b>\n\n"
+              "اسعار الذهب الان 💰\n\n"
 
-              f"🥇 عيار 24: <b>{price_24}</b> جنيه\n"
+              f"💍 عيار 18: <b>{price_18}</b> جنيه\n"
 
-              f"🥈 عيار 21: <b>{price_21}</b> جنيه\n"
+              f"💍 عيار 21: <b>{price_21}</b> جنيه\n"
 
-              f"🥉 عيار 18: <b>{price_18}</b> جنيه\n"
+              f"💍 عيار 24: <b>{price_24}</b> جنيه\n\n"
 
-              f"💰 جنيه الذهب: <b>{gold_pound}</b> جنيه"
+              f"💎 جنيه الذهب: <b>{gold_pound}</b> جنيه\n"
+
+              f"📊 الأونصة بالدولار: <b>{ounce_usd}</b> دولار\n\n"
+
+              f"🌟 سعر الشراء: <b>{buy_price}</b>\n"
+
+              f"🌟 سعر البيع: <b>{sell_price}</b>\n\n"
+
+              f"💵 سعر الدولار: <b>{usd_to_egp}</b> جنيه\n"
+
+              f"💵 دولار الصاغة: <b>{sagha_usd}</b> جنيه"
 
           )
 
