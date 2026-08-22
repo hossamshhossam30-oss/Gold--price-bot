@@ -1,108 +1,861 @@
-import re
-import os
-import requests
+name: Update gold prices
 
-def parse_gold_prices(raw_text):
-    data = {
-        'carat_18': 'غير متوفر',
-        'carat_21': 'غير متوفر',
-        'carat_24': 'غير متوفر',
-        'gold_pound': 'غير متوفر',
-        'ounce_usd': 'غير متوفر',
-        'buy_price': 'غير متوفر',
-        'sell_price': 'غير متوفر',
-        'usd_rate': 'غير متوفر',
-        'sagha_usd': 'غير متوفر'
-    }
-    
-    lines = raw_text.split('\n')
-    
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-            
-        try:
-            # 1. أسعار العيارات
-            if 'عيار 18' in line:
-                match = re.search(r'(\d+)', line.split('18')[-1])
-                if match: data['carat_18'] = match.group(1)
-                
-            elif 'عيار 21' in line:
-                match = re.search(r'(\d+)', line.split('21')[-1])
-                if match: data['carat_21'] = match.group(1)
-                
-            elif 'عيار 24' in line:
-                match = re.search(r'(\d+)', line.split('24')[-1])
-                if match: data['carat_24'] = match.group(1)
-                
-            # 2. سعر جنيه الذهب (تجاهل رقم 21 للعيار)
-            elif 'جنيه الذهب' in line:
-                numbers = re.findall(r'\d+', line)
-                valid_numbers = [num for num in numbers if num != '21']
-                if valid_numbers:
-                    data['gold_pound'] = valid_numbers[0]
-                    
-            # 3. الأونصة بالدولار
-            elif 'الأونصة' in line or 'الاونصة' in line:
-                match = re.search(r'(\d+)', line)
-                if match: data['ounce_usd'] = match.group(1)
-                
-            # 4. سعر الشراء والبيع
-            elif 'سعر الشراء' in line:
-                match = re.search(r'(\d+)', line)
-                if match: data['buy_price'] = match.group(1)
-                
-            elif 'سعر البيع' in line:
-                match = re.search(r'(\d+)', line)
-                if match: data['sell_price'] = match.group(1)
-                
-            # 5. سعر الدولار ودولار الصاغة
-            elif 'دولار الصاغة' in line:
-                match = re.search(r'([\d\.]+)', line)
-                if match: data['sagha_usd'] = match.group(1)
-                
-            elif 'سعر الدولار' in line and 'الأونصة' not in line and 'الصاغة' not in line:
-                match = re.search(r'([\d\.]+)', line)
-                if match: data['usd_rate'] = match.group(1)
-        except Exception as e:
-            print(f"Error parsing line: {line} -> {e}")
-            continue
+on:
+  workflow_dispatch:
 
-    return data
+  schedule:
+    - cron: "*/5 * * * *"
 
-def generate_formatted_telegram_message(data):
-    return f"""اسعار الذهب الان 💰
+permissions:
+  contents: write
 
-💍 عيار 18: {data['carat_18']} جنيه
-💍 عيار 21: {data['carat_21']} جنيه
-💍 عيار 24: {data['carat_24']} جنيه
+# منع تشغيل أكثر من نسخة من نفس التحديث في نفس الوقت
+concurrency:
+  group: gold-prices-update
+  cancel-in-progress: false
 
-💎 جنيه الذهب: {data['gold_pound']} جنيه
-📊 الأونصة بالدولار: {data['ounce_usd']} دولار
+jobs:
+  update:
+    runs-on: ubuntu-latest
 
-🌟 سعر الشراء: {data['buy_price']}
-🌟 سعر البيع: {data['sell_price']}
+    steps:
 
-💵 سعر الدولار: {data['usd_rate']} جنيه
-💵 دولار الصاغة: {data['sagha_usd']} جنيه"""
+      # =========================
+      # 1. تحميل المستودع
+      # =========================
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-# --- التنفيذ الأساسي ---
-def main():
-    # استبدل النص التالي بالطريقة التي تجلب بها النص من التليجرام (مثلاً raw_text من القناة)
-    raw_telegram_text = """ضع النص المستخرج هنا أو قم بربطه بمتغير الرسالة"""
-    
-    try:
-        parsed_data = parse_gold_prices(raw_telegram_text)
-        final_output = generate_formatted_telegram_message(parsed_data)
-        
-        print("تم استخراج البيانات بنجاح:")
-        print(final_output)
-        
-        # كود حفظ البيانات أو إرسال القناة يوضع هنا
-        
-    except Exception as main_error:
-        print(f"حدث خطأ أثناء التشغيل: {main_error}")
+      # =========================
+      # 2. إعداد Python
+      # =========================
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
 
-if __name__ == "__main__":
-    main()
+      # =========================
+      # 3. تثبيت المكتبات
+      # =========================
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
+
+      # =========================
+      # 4. جلب الأسعار والنشر في القناة
+      # =========================
+      - name: Fetch gold prices and post to Telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+        run: |
+
+          python - <<'PY'
+
+          import json
+          import re
+          import os
+          import time
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+
+          import requests
+          from bs4 import BeautifulSoup
+
+
+          # =========================================================
+          # الإعدادات
+          # =========================================================
+
+          CHANNEL_URL = "https://t.me/s/goldpricenowlive"
+          JSON_FILE = "prices.json"
+
+          HEADERS = {
+              "User-Agent": (
+                  "Mozilla/5.0 (Linux; Android 10; K) "
+                  "AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) "
+                  "Chrome/131.0 Mobile Safari/537.36"
+              ),
+              "Cache-Control": "no-cache, no-store, max-age=0",
+              "Pragma": "no-cache",
+              "Accept-Language": "ar,en-US;q=0.9,en;q=0.8"
+          }
+
+
+          # =========================================================
+          # تحويل الأرقام العربية والفارسية إلى إنجليزية
+          # =========================================================
+
+          def normalize_digits(value):
+
+              if value is None:
+                  return value
+
+              arabic_digits = str.maketrans(
+                  "٠١٢٣٤٥٦٧٨٩",
+                  "0123456789"
+              )
+
+              persian_digits = str.maketrans(
+                  "۰۱۲۳۴۵۶۷۸۹",
+                  "0123456789"
+              )
+
+              value = str(value).translate(arabic_digits)
+              value = value.translate(persian_digits)
+
+              return value
+
+
+          # =========================================================
+          # تنظيف وتحويل الرقم
+          # =========================================================
+
+          def clean_number(value):
+
+              value = normalize_digits(value)
+
+              value = value.replace(",", "")
+              value = value.replace("٬", "")
+              value = value.replace(" ", "")
+              value = value.strip()
+
+              try:
+
+                  if "." in value:
+                      return float(value)
+
+                  return int(value)
+
+              except ValueError:
+
+                  raise ValueError(
+                      f"رقم غير صالح: {value}"
+                  )
+
+
+          # =========================================================
+          # استخراج قيمة من النص
+          # =========================================================
+
+          def extract_value(patterns, text):
+
+              for pattern in patterns:
+
+                  match = re.search(
+                      pattern,
+                      text,
+                      flags=re.IGNORECASE | re.UNICODE
+                  )
+
+                  if match:
+
+                      try:
+                          return clean_number(match.group(1))
+
+                      except ValueError:
+                          continue
+
+              return None
+
+
+          # =========================================================
+          # جلب قناة Telegram مع منع الكاش
+          # =========================================================
+
+          cache_buster = str(
+              int(time.time())
+          )
+
+          url = (
+              f"{CHANNEL_URL}"
+              f"?nocache={cache_buster}"
+          )
+
+          print("====================================")
+          print("جاري جلب أحدث أسعار الذهب...")
+          print("====================================")
+          print("Source:", url)
+
+
+          try:
+
+              response = requests.get(
+                  url,
+                  headers=HEADERS,
+                  timeout=30
+              )
+
+              response.raise_for_status()
+
+          except requests.RequestException as e:
+
+              raise SystemExit(
+                  f"فشل الاتصال بمصدر أسعار الذهب: {e}"
+              )
+
+
+          response.encoding = "utf-8"
+
+
+          soup = BeautifulSoup(
+              response.text,
+              "html.parser"
+          )
+
+
+          # =========================================================
+          # العثور على رسائل Telegram
+          # =========================================================
+
+          messages = soup.find_all(
+              "div",
+              class_="tgme_widget_message_text"
+          )
+
+
+          if not messages:
+
+              raise SystemExit(
+                  "لم يتم العثور على رسائل في قناة Telegram"
+              )
+
+
+          print(
+              f"عدد الرسائل الموجودة: {len(messages)}"
+          )
+
+
+          # =========================================================
+          # البحث من الأحدث إلى الأقدم
+          # =========================================================
+
+          latest_message = None
+
+
+          for message in reversed(messages):
+
+              text = message.get_text(
+                  separator="\n",
+                  strip=True
+              )
+
+              has_21 = re.search(
+                  r"عيار\s*21",
+                  text,
+                  flags=re.UNICODE
+              )
+
+              has_18 = re.search(
+                  r"عيار\s*18",
+                  text,
+                  flags=re.UNICODE
+              )
+
+
+              if has_21 and has_18:
+
+                  latest_message = text
+
+                  break
+
+
+          if not latest_message:
+
+              raise SystemExit(
+                  "لم يتم العثور على رسالة أسعار صالحة"
+              )
+
+
+          print("\n========== أحدث رسالة ==========")
+          print(latest_message)
+          print("=================================\n")
+
+
+          # =========================================================
+          # استخراج أسعار الذهب
+          # =========================================================
+
+          price_24 = extract_value(
+              [
+                  r"عيار\s*24\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"
+              ],
+              latest_message
+          )
+
+
+          price_21 = extract_value(
+              [
+                  r"عيار\s*21\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"
+              ],
+              latest_message
+          )
+
+
+          price_18 = extract_value(
+              [
+                  r"عيار\s*18\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"
+              ],
+              latest_message
+          )
+
+
+          gold_pound = extract_value(
+              [
+                  r"جنيه\s*الذهب\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)",
+                  r"جنيه\s*ذهب\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"
+              ],
+              latest_message
+          )
+
+
+          ounce_usd = extract_value(
+              [
+                  r"الأونصة\s*بالدولار\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)",
+                  r"اونصة\s*بالدولار\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"
+              ],
+              latest_message
+          )
+
+
+          buy_price = extract_value(
+              [
+                  r"سعر\s*الشراء\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"
+              ],
+              latest_message
+          )
+
+
+          sell_price = extract_value(
+              [
+                  r"سعر\s*البيع\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"
+              ],
+              latest_message
+          )
+
+
+          usd_to_egp = extract_value(
+              [
+                  r"سعر\s*الدولار\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"
+              ],
+              latest_message
+          )
+
+
+          sagha_usd = extract_value(
+              [
+                  r"دولار\s*الصاغة\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"
+              ],
+              latest_message
+          )
+
+
+          # =========================================================
+          # التحقق من الأسعار الأساسية
+          # =========================================================
+
+          required_prices = {
+              "price_gram_24k": price_24,
+              "price_gram_21k": price_21,
+              "price_gram_18k": price_18
+          }
+
+
+          for key, value in required_prices.items():
+
+              if value is None:
+
+                  raise SystemExit(
+                      f"فشل استخراج السعر: {key}"
+                  )
+
+
+              if value <= 0:
+
+                  raise SystemExit(
+                      f"السعر غير صالح: {key} = {value}"
+                  )
+
+
+          # =========================================================
+          # تجهيز البيانات
+          # =========================================================
+
+          new_prices = {
+
+              "price_gram_24k": price_24,
+
+              "price_gram_21k": price_21,
+
+              "price_gram_18k": price_18,
+
+              "gold_pound": gold_pound,
+
+              "ounce_usd": ounce_usd,
+
+              "buy_price": buy_price,
+
+              "sell_price": sell_price,
+
+              "usd_to_egp": usd_to_egp,
+
+              "sagha_usd": sagha_usd
+          }
+
+
+          # =========================================================
+          # قراءة البيانات القديمة
+          # =========================================================
+
+          old_prices = {}
+
+
+          if os.path.exists(JSON_FILE):
+
+              try:
+
+                  with open(
+                      JSON_FILE,
+                      "r",
+                      encoding="utf-8"
+                  ) as f:
+
+                      old_prices = json.load(f)
+
+              except Exception as e:
+
+                  print(
+                      "تحذير: تعذر قراءة البيانات القديمة:",
+                      e
+                  )
+
+
+          # =========================================================
+          # معرفة هل السعر تغير
+          # =========================================================
+
+          price_keys = [
+
+              "price_gram_24k",
+
+              "price_gram_21k",
+
+              "price_gram_18k",
+
+              "gold_pound",
+
+              "ounce_usd",
+
+              "buy_price",
+
+              "sell_price",
+
+              "usd_to_egp",
+
+              "sagha_usd"
+
+          ]
+
+
+          prices_changed = False
+
+
+          for key in price_keys:
+
+              old_value = old_prices.get(key)
+
+              new_value = new_prices.get(key)
+
+
+              if old_value != new_value:
+
+                  prices_changed = True
+
+                  print(
+                      f"تغير: {key} "
+                      f"{old_value} -> {new_value}"
+                  )
+
+
+          # =========================================================
+          # وقت التحديث بتوقيت مصر
+          # =========================================================
+
+          egypt_now = datetime.now(
+              ZoneInfo("Africa/Cairo")
+          )
+
+
+          updated_at = egypt_now.strftime(
+              "%Y-%m-%d %H:%M:%S"
+          )
+
+
+          # =========================================================
+          # تحديث prices.json
+          #
+          # يتم تغيير الملف فقط عندما يتغير السعر
+          # =========================================================
+
+          if prices_changed or not os.path.exists(JSON_FILE):
+
+              new_prices["updated_at"] = updated_at
+
+              new_prices["source"] = CHANNEL_URL
+
+
+              with open(
+                  JSON_FILE,
+                  "w",
+                  encoding="utf-8"
+              ) as f:
+
+                  json.dump(
+                      new_prices,
+                      f,
+                      ensure_ascii=False,
+                      indent=2
+                  )
+
+
+              print(
+                  "تم تحديث prices.json"
+              )
+
+          else:
+
+              print(
+                  "الأسعار لم تتغير."
+              )
+
+              print(
+                  "سيتم الاحتفاظ بملف prices.json كما هو."
+              )
+
+
+          # =========================================================
+          # عرض الأسعار
+          # =========================================================
+
+          print("\n================================")
+          print("الأسعار المستخرجة")
+          print("================================")
+
+          print(
+              "عيار 24:",
+              price_24
+          )
+
+          print(
+              "عيار 21:",
+              price_21
+          )
+
+          print(
+              "عيار 18:",
+              price_18
+          )
+
+          print(
+              "جنيه الذهب:",
+              gold_pound
+          )
+
+          print(
+              "الأونصة:",
+              ounce_usd
+          )
+
+          print(
+              "سعر الشراء:",
+              buy_price
+          )
+
+          print(
+              "سعر البيع:",
+              sell_price
+          )
+
+          print(
+              "الدولار:",
+              usd_to_egp
+          )
+
+          print(
+              "دولار الصاغة:",
+              sagha_usd
+          )
+
+          print(
+              "وقت تشغيل التحديث:",
+              updated_at
+          )
+
+          print(
+              "هل تغير السعر؟:",
+              prices_changed
+          )
+
+
+          # =========================================================
+          # إرسال المنشور إلى قناة "يوم الذهب"
+          #
+          # مهم:
+          # يتم الإرسال في كل تشغيل للـ Workflow
+          # حتى لو الأسعار لم تتغير.
+          #
+          # هذا يحافظ على سلوك البوت القديم.
+          # =========================================================
+
+          bot_token = os.getenv(
+              "TELEGRAM_BOT_TOKEN"
+          )
+
+          chat_id = os.getenv(
+              "TELEGRAM_CHAT_ID"
+          )
+
+
+          if not bot_token:
+
+              raise SystemExit(
+                  "TELEGRAM_BOT_TOKEN غير موجود"
+              )
+
+
+          if not chat_id:
+
+              raise SystemExit(
+                  "TELEGRAM_CHAT_ID غير موجود"
+              )
+
+
+          message_text = (
+
+              "🏆 <b>تحديث أسعار الذهب اليوم</b>\n\n"
+
+              f"🥇 عيار 24: <b>{price_24}</b> جنيه\n"
+
+              f"🥈 عيار 21: <b>{price_21}</b> جنيه\n"
+
+              f"🥉 عيار 18: <b>{price_18}</b> جنيه\n"
+
+              f"💰 جنيه الذهب: <b>{gold_pound}</b> جنيه"
+
+          )
+
+
+          telegram_url = (
+              f"https://api.telegram.org/"
+              f"bot{bot_token}/sendMessage"
+          )
+
+
+          payload = {
+
+              "chat_id": chat_id,
+
+              "text": message_text,
+
+              "parse_mode": "HTML",
+
+              "disable_web_page_preview": True
+          }
+
+
+          # =========================================================
+          # إرسال الرسالة
+          # =========================================================
+
+          print("\n================================")
+          print("جاري إرسال المنشور إلى Telegram...")
+          print("================================")
+
+
+          try:
+
+              telegram_response = requests.post(
+
+                  telegram_url,
+
+                  data=payload,
+
+                  timeout=20
+              )
+
+
+              if telegram_response.status_code != 200:
+
+                  print(
+                      "Telegram Response:",
+                      telegram_response.text
+                  )
+
+                  raise SystemExit(
+                      "فشل إرسال منشور Telegram"
+                  )
+
+
+              telegram_data = (
+                  telegram_response.json()
+              )
+
+
+              if not telegram_data.get("ok"):
+
+                  print(
+                      "Telegram Error:",
+                      telegram_data
+                  )
+
+                  raise SystemExit(
+                      "Telegram رفض إرسال الرسالة"
+                  )
+
+
+              message_id = (
+                  telegram_data
+                  .get("result", {})
+                  .get("message_id")
+              )
+
+
+              print(
+                  "تم نشر المنشور بنجاح في قناة يوم الذهب."
+              )
+
+
+              print(
+                  "Message ID:",
+                  message_id
+              )
+
+
+          except requests.RequestException as e:
+
+              raise SystemExit(
+                  f"خطأ أثناء الاتصال بـ Telegram: {e}"
+              )
+
+
+          PY
+
+
+      # =========================
+      # 5. التحقق من prices.json
+      # =========================
+      - name: Validate prices.json
+        run: |
+
+          python - <<'PY'
+
+          import json
+          import os
+          import sys
+
+
+          FILE = "prices.json"
+
+
+          if not os.path.exists(FILE):
+
+              print(
+                  "prices.json غير موجود"
+              )
+
+              sys.exit(1)
+
+
+          with open(
+              FILE,
+              "r",
+              encoding="utf-8"
+          ) as f:
+
+              data = json.load(f)
+
+
+          required = [
+
+              "price_gram_24k",
+
+              "price_gram_21k",
+
+              "price_gram_18k"
+
+          ]
+
+
+          for key in required:
+
+              if key not in data:
+
+                  print(
+                      f"المفتاح غير موجود: {key}"
+                  )
+
+                  sys.exit(1)
+
+
+              if data[key] in [
+                  None,
+                  "",
+                  "N/A"
+              ]:
+
+                  print(
+                      f"قيمة غير صالحة: {key}"
+                  )
+
+                  sys.exit(1)
+
+
+          print(
+              "تم التحقق من prices.json بنجاح."
+          )
+
+
+          print(
+              json.dumps(
+                  data,
+                  ensure_ascii=False,
+                  indent=2
+              )
+          )
+
+          PY
+
+
+      # =========================
+      # 6. حفظ prices.json في GitHub
+      # =========================
+      - name: Commit updated prices
+        run: |
+
+          git config user.name \
+            "github-actions[bot]"
+
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+
+          git add prices.json
+
+
+          if git diff --cached --quiet; then
+
+            echo "لا توجد تغييرات في prices.json."
+
+          else
+
+            git commit \
+              -m "Update gold prices"
+
+            git push
+
+          fi
