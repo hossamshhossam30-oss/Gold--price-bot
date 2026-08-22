@@ -1,19 +1,20 @@
 import re
+import os
+import requests
 
 def parse_gold_prices(raw_text):
     data = {
-        'carat_18': None,
-        'carat_21': None,
-        'carat_24': None,
-        'gold_pound': None,
-        'ounce_usd': None,
-        'buy_price': None,
-        'sell_price': None,
-        'usd_rate': None,
-        'sagha_usd': None
+        'carat_18': 'غير متوفر',
+        'carat_21': 'غير متوفر',
+        'carat_24': 'غير متوفر',
+        'gold_pound': 'غير متوفر',
+        'ounce_usd': 'غير متوفر',
+        'buy_price': 'غير متوفر',
+        'sell_price': 'غير متوفر',
+        'usd_rate': 'غير متوفر',
+        'sagha_usd': 'غير متوفر'
     }
     
-    # تقسيم النص إلى أسطر وقراءته سطرًا بسطر لمنع تداخل البيانات
     lines = raw_text.split('\n')
     
     for line in lines:
@@ -21,55 +22,57 @@ def parse_gold_prices(raw_text):
         if not line:
             continue
             
-        # 1. استخراج أسعار العيارات
-        if 'عيار 18' in line:
-            match = re.search(r'(\d+)', line.split('18')[-1])
-            if match: data['carat_18'] = match.group(1)
-            
-        elif 'عيار 21' in line:
-            match = re.search(r'(\d+)', line.split('21')[-1])
-            if match: data['carat_21'] = match.group(1)
-            
-        elif 'عيار 24' in line:
-            match = re.search(r'(\d+)', line.split('24')[-1])
-            if match: data['carat_24'] = match.group(1)
-            
-        # 2. استخراج سعر جنيه الذهب (تجاهل الرقم إذا كان يخص عيار 21)
-        elif 'جنيه الذهب' in line:
-            numbers = re.findall(r'\d+', line)
-            # أخذ الرقم الأكبر عادة لضمان استخراج السعر وليس العيار
-            valid_numbers = [num for num in numbers if num != '21']
-            if valid_numbers:
-                data['gold_pound'] = valid_numbers[0]
+        try:
+            # 1. أسعار العيارات
+            if 'عيار 18' in line:
+                match = re.search(r'(\d+)', line.split('18')[-1])
+                if match: data['carat_18'] = match.group(1)
                 
-        # 3. استخراج سعر الأونصة بالدولار
-        elif 'الأونصة بالدولار' in line or 'الاونصة بالدولار' in line:
-            match = re.search(r'(\d+)', line)
-            if match: data['ounce_usd'] = match.group(1)
-            
-        # 4. استخراج سعر الشراء والبيع
-        elif 'سعر الشراء' in line:
-            match = re.search(r'(\d+)', line)
-            if match: data['buy_price'] = match.group(1)
-            
-        elif 'سعر البيع' in line:
-            match = re.search(r'(\d+)', line)
-            if match: data['sell_price'] = match.group(1)
-            
-        # 5. استخراج سعر الدولار ودولار الصاغة
-        elif 'دولار الصاغة' in line:
-            match = re.search(r'([\d\.]+)', line)
-            if match: data['sagha_usd'] = match.group(1)
-            
-        elif 'سعر الدولار' in line and 'الأونصة' not in line and 'الصاغة' not in line:
-            match = re.search(r'([\d\.]+)', line)
-            if match: data['usd_rate'] = match.group(1)
+            elif 'عيار 21' in line:
+                match = re.search(r'(\d+)', line.split('21')[-1])
+                if match: data['carat_21'] = match.group(1)
+                
+            elif 'عيار 24' in line:
+                match = re.search(r'(\d+)', line.split('24')[-1])
+                if match: data['carat_24'] = match.group(1)
+                
+            # 2. سعر جنيه الذهب (تجاهل رقم 21 للعيار)
+            elif 'جنيه الذهب' in line:
+                numbers = re.findall(r'\d+', line)
+                valid_numbers = [num for num in numbers if num != '21']
+                if valid_numbers:
+                    data['gold_pound'] = valid_numbers[0]
+                    
+            # 3. الأونصة بالدولار
+            elif 'الأونصة' in line or 'الاونصة' in line:
+                match = re.search(r'(\d+)', line)
+                if match: data['ounce_usd'] = match.group(1)
+                
+            # 4. سعر الشراء والبيع
+            elif 'سعر الشراء' in line:
+                match = re.search(r'(\d+)', line)
+                if match: data['buy_price'] = match.group(1)
+                
+            elif 'سعر البيع' in line:
+                match = re.search(r'(\d+)', line)
+                if match: data['sell_price'] = match.group(1)
+                
+            # 5. سعر الدولار ودولار الصاغة
+            elif 'دولار الصاغة' in line:
+                match = re.search(r'([\d\.]+)', line)
+                if match: data['sagha_usd'] = match.group(1)
+                
+            elif 'سعر الدولار' in line and 'الأونصة' not in line and 'الصاغة' not in line:
+                match = re.search(r'([\d\.]+)', line)
+                if match: data['usd_rate'] = match.group(1)
+        except Exception as e:
+            print(f"Error parsing line: {line} -> {e}")
+            continue
 
     return data
 
 def generate_formatted_telegram_message(data):
-    # إعادة الصياغة بالنص المنسق الصحيح للمنشور الجديد
-    message = f"""اسعار الذهب الان 💰
+    return f"""اسعار الذهب الان 💰
 
 💍 عيار 18: {data['carat_18']} جنيه
 💍 عيار 21: {data['carat_21']} جنيه
@@ -83,28 +86,23 @@ def generate_formatted_telegram_message(data):
 
 💵 سعر الدولار: {data['usd_rate']} جنيه
 💵 دولار الصاغة: {data['sagha_usd']} جنيه"""
+
+# --- التنفيذ الأساسي ---
+def main():
+    # استبدل النص التالي بالطريقة التي تجلب بها النص من التليجرام (مثلاً raw_text من القناة)
+    raw_telegram_text = """ضع النص المستخرج هنا أو قم بربطه بمتغير الرسالة"""
     
-    return message
+    try:
+        parsed_data = parse_gold_prices(raw_telegram_text)
+        final_output = generate_formatted_telegram_message(parsed_data)
+        
+        print("تم استخراج البيانات بنجاح:")
+        print(final_output)
+        
+        # كود حفظ البيانات أو إرسال القناة يوضع هنا
+        
+    except Exception as main_error:
+        print(f"حدث خطأ أثناء التشغيل: {main_error}")
 
-# --- تجربة الكود على النص الأصلي ---
-raw_telegram_text = """
-اسعار الذهب الان 💰
-
-عيار 18 5657 جنيه
-عيار 21 6600 جنيه
-عيار 24 7543 جنيه
-
-جنيه الذهب 52800 جنيه
-الأونصة بالدولار 4605 دولار
-
-سعر الشراء 6600
-سعر البيع 6560
-
-سعر الدولار 51.00 جنيه
-دولار الصاغة 50.94 جنيه
-"""
-
-parsed_data = parse_gold_prices(raw_telegram_text)
-final_output = generate_formatted_telegram_message(parsed_data)
-
-print(final_output)
+if __name__ == "__main__":
+    main()
