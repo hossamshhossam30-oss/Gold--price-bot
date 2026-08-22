@@ -144,7 +144,7 @@ jobs:
           price_21 = extract_value([r"عيار\s*21\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
           price_18 = extract_value([r"عيار\s*18\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
 
-          # استخراج جنيه الذهب مع تجاهل رقم 21 الخاص بالعيار
+          # استخراج جنيه الذهب وتجاهل رقم العيار 21
           gold_pound = None
           for line in latest_message.split('\n'):
               if 'جنيه' in line and ('الذهب' in line or 'ذهب' in line):
@@ -165,7 +165,7 @@ jobs:
           buy_price = extract_value([r"سعر\s*الشراء\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
           sell_price = extract_value([r"سعر\s*البيع\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
 
-          # استخراج سعر الدولار الاستخراج الصحيح بفرز الأسطر
+          # استخراج سعر الدولار بدقة
           usd_to_egp = None
           for line in latest_message.split('\n'):
               if 'سعر الدولار' in line and 'الأونصة' not in line and 'الصاغة' not in line:
@@ -231,13 +231,13 @@ jobs:
           if bot_token and chat_id:
               message_text = (
                   "اسعار الذهب الان 💰\n\n"
+                  f"🌟 سعر الشراء: <b>{buy_price}</b> جنيه\n"
+                  f"🌟 سعر البيع: <b>{sell_price}</b> جنيه\n\n"
                   f"💍 عيار 18: <b>{price_18}</b> جنيه\n"
                   f"💍 عيار 21: <b>{price_21}</b> جنيه\n"
                   f"💍 عيار 24: <b>{price_24}</b> جنيه\n\n"
                   f"💎 جنيه الذهب: <b>{gold_pound}</b> جنيه\n"
                   f"📊 الأونصة بالدولار: <b>{ounce_usd}</b> دولار\n\n"
-                  f"🌟 سعر الشراء: <b>{buy_price}</b>\n"
-                  f"🌟 سعر البيع: <b>{sell_price}</b>\n\n"
                   f"💵 سعر الدولار: <b>{usd_to_egp}</b> جنيه\n"
                   f"💵 دولار الصاغة: <b>{sagha_usd}</b> جنيه"
               )
