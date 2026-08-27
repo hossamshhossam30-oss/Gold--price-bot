@@ -17,34 +17,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
-      # =========================
       # 1. تحميل المستودع
-      # =========================
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      # =========================
       # 2. إعداد Python
-      # =========================
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
-      # =========================
       # 3. تثبيت المكتبات
-      # =========================
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4
 
-      # =========================
-      # 4. جلب الأسعار والنشر في القناة
-      # =========================
+      # 4. جلب الأسعار والنشر في القناة وتحديث الملف
       - name: Fetch gold prices and post to Telegram
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -67,13 +58,13 @@ jobs:
 
           HEADERS = {
               "User-Agent": (
-                  "Mozilla/5.0 (Linux; Android 10; K) "
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                   "AppleWebKit/537.36 (KHTML, like Gecko) "
-                  "Chrome/131.0 Mobile Safari/537.36"
+                  "Chrome/120.0.0.0 Safari/537.36"
               ),
               "Cache-Control": "no-cache, no-store, max-age=0",
               "Pragma": "no-cache",
-              "Accept-Language": "ar,en-US;q=0.9,en;q=0.8"
+              "Accept-Language": "ar,en;q=0.9"
           }
 
           def normalize_digits(value):
@@ -91,16 +82,15 @@ jobs:
                       return float(value)
                   return int(value)
               except ValueError:
-                  raise ValueError(f"رقم غير صالح: {value}")
+                  return None
 
           def extract_value(patterns, text):
               for pattern in patterns:
                   match = re.search(pattern, text, flags=re.IGNORECASE | re.UNICODE)
                   if match:
-                      try:
-                          return clean_number(match.group(1))
-                      except ValueError:
-                          continue
+                      val = clean_number(match.group(1))
+                      if val is not None:
+                          return val
               return None
 
           cache_buster = str(int(time.time()))
@@ -116,33 +106,40 @@ jobs:
 
           response.encoding = "utf-8"
           soup = BeautifulSoup(response.text, "html.parser")
-          messages = soup.find_all("div", class_="tgme_widget_message_text")
+          
+          messages = soup.find_all("div", class_="tgme_widget_message_wrap")
 
           if not messages:
               raise SystemExit("لم يتم العثور على رسائل في قناة Telegram")
 
           latest_message = None
-          for message in reversed(messages):
-              text = message.get_text(separator="\n", strip=True)
-              if re.search(r"21", text) and re.search(r"18", text):
+          
+          for msg_wrap in reversed(messages):
+              text_div = msg_wrap.find("div", class_="tgme_widget_message_text")
+              if not text_div:
+                  continue
+              text = text_div.get_text(separator="\n", strip=True)
+              
+              if ("عيار 21" in text or "21" in text) and ("اسعار الذهب" in text or "أسعار الذهب" in text or "جنيه الذهب" in text):
                   latest_message = text
                   break
 
           if not latest_message:
               raise SystemExit("لم يتم العثور على رسالة أسعار صالحة")
 
-          # استخراج العيارات
+          print("--- النص الملتقط من الرسالة الأحدث ---")
+          print(latest_message)
+          print("---------------------------------------")
+
           price_24 = extract_value([r"24\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
           price_21 = extract_value([r"21\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
           price_18 = extract_value([r"18\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
 
-          # استخراج جنيه الذهب بتحديد دقيق لتجنب كلمة "جنيه" المنفصلة
           gold_pound = extract_value([
               r"جنيه\s*الذهب\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)",
               r"الجنيه\s*الذهب\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"
           ], latest_message)
 
-          # استخراج بقية البيانات
           ounce_usd = extract_value([r"(?:الأونصة|الاونصة|اونصة|الأوقية)\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
           buy_price = extract_value([r"الشراء\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
           sell_price = extract_value([r"البيع\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
@@ -176,13 +173,13 @@ jobs:
               old_val = old_prices.get(key)
               if new_val is not None:
                   new_prices[key] = new_val
-                  if old_val != new_val:
+                  if str(old_val) != str(new_val):
                       prices_changed = True
               else:
                   new_prices[key] = old_val if old_val is not None else "غير متوفر"
 
           egypt_now = datetime.now(ZoneInfo("Africa/Cairo"))
-          updated_at = egypt_now.strftime("%Y-%m-%d %H:%M:%S")
+          updated_at = egypt_now.strftime("%Y-%m-%d %I:%M:%S %p")
 
           if prices_changed or not os.path.exists(JSON_FILE):
               new_prices["updated_at"] = updated_at
@@ -228,9 +225,7 @@ jobs:
               print("لا توجد أسعار جديدة، تم تخطي التحديث وإعادة النشر.")
           PY
 
-      # =========================
-      # 5. التحقق من prices.json
-      # =========================
+      # 5. التحقق من صحة الملف
       - name: Validate prices.json
         run: |
           python - <<'PY'
@@ -255,13 +250,11 @@ jobs:
           print("تم التحقق من prices.json بنجاح.")
           PY
 
-      # =========================
-      # 6. حفظ prices.json في GitHub
-      # =========================
+      # 6. رفع التعديلات لمستودع GitHub
       - name: Commit updated prices
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]"
 
           git add prices.json
 
