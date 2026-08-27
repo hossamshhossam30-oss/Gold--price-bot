@@ -1,4 +1,4 @@
-name: Update gold prices
+Name: Update gold prices
 
 on:
   workflow_dispatch:
@@ -17,25 +17,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+      # =========================
       # 1. تحميل المستودع
+      # =========================
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
+      # =========================
       # 2. إعداد Python
+      # =========================
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
+      # =========================
       # 3. تثبيت المكتبات
+      # =========================
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4
 
-      # 4. جلب الأسعار والنشر في القناة وتحديث الملف
+      # =========================
+      # 4. جلب الأسعار والنشر في القناة
+      # =========================
       - name: Fetch gold prices and post to Telegram
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -64,7 +73,7 @@ jobs:
               ),
               "Cache-Control": "no-cache, no-store, max-age=0",
               "Pragma": "no-cache",
-              "Accept-Language": "ar,en;q=0.9"
+              "Accept-Language": "ar,en-US;q=0.9,en;q=0.8"
           }
 
           def normalize_digits(value):
@@ -107,18 +116,21 @@ jobs:
           response.encoding = "utf-8"
           soup = BeautifulSoup(response.text, "html.parser")
           
-          messages = soup.find_all("div", class_="tgme_widget_message_wrap")
+          # البحث في فقاعات الرسائل بالكامل لشمل النصوص والتعليقات المصاحبة للصور
+          messages = soup.find_all("div", class_=["tgme_widget_message_bubble", "tgme_widget_message_wrap"])
 
           if not messages:
               raise SystemExit("لم يتم العثور على رسائل في قناة Telegram")
 
           latest_message = None
           
-          for msg_wrap in reversed(messages):
-              text_div = msg_wrap.find("div", class_="tgme_widget_message_text")
-              if not text_div:
+          for msg in reversed(messages):
+              # البحث عن النص سواء كان منشوراً نصياً عادياً أو تعليق صورة (Caption)
+              text_el = msg.find(class_=["tgme_widget_message_text", "tgme_widget_message_subtext"])
+              if not text_el:
                   continue
-              text = text_div.get_text(separator="\n", strip=True)
+                  
+              text = text_el.get_text(separator="\n", strip=True)
               
               if ("عيار 21" in text or "21" in text) and ("اسعار الذهب" in text or "أسعار الذهب" in text or "جنيه الذهب" in text):
                   latest_message = text
@@ -131,6 +143,7 @@ jobs:
           print(latest_message)
           print("---------------------------------------")
 
+          # استخراج العيارات وبقية البيانات
           price_24 = extract_value([r"24\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
           price_21 = extract_value([r"21\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
           price_18 = extract_value([r"18\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
@@ -179,7 +192,7 @@ jobs:
                   new_prices[key] = old_val if old_val is not None else "غير متوفر"
 
           egypt_now = datetime.now(ZoneInfo("Africa/Cairo"))
-          updated_at = egypt_now.strftime("%Y-%m-%d %I:%M:%S %p")
+          updated_at = egypt_now.strftime("%Y-%m-%d %H:%M:%S")
 
           if prices_changed or not os.path.exists(JSON_FILE):
               new_prices["updated_at"] = updated_at
@@ -225,7 +238,9 @@ jobs:
               print("لا توجد أسعار جديدة، تم تخطي التحديث وإعادة النشر.")
           PY
 
-      # 5. التحقق من صحة الملف
+      # =========================
+      # 5. التحقق من prices.json
+      # =========================
       - name: Validate prices.json
         run: |
           python - <<'PY'
@@ -250,11 +265,13 @@ jobs:
           print("تم التحقق من prices.json بنجاح.")
           PY
 
-      # 6. رفع التعديلات لمستودع GitHub
+      # =========================
+      # 6. حفظ prices.json في GitHub
+      # =========================
       - name: Commit updated prices
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add prices.json
 
