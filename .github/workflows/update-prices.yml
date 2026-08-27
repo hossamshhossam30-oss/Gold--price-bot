@@ -124,7 +124,6 @@ jobs:
           latest_message = None
           for message in reversed(messages):
               text = message.get_text(separator="\n", strip=True)
-              # فحص وجود أرقام العيارات الأساسية بشكل مرن
               if re.search(r"21", text) and re.search(r"18", text):
                   latest_message = text
                   break
@@ -132,15 +131,22 @@ jobs:
           if not latest_message:
               raise SystemExit("لم يتم العثور على رسالة أسعار صالحة")
 
+          # استخراج العيارات
           price_24 = extract_value([r"24\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
           price_21 = extract_value([r"21\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
           price_18 = extract_value([r"18\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
 
-          gold_pound = extract_value([r"(?:جنيه|الجنيه)\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
+          # استخراج جنيه الذهب بتحديد دقيق لتجنب كلمة "جنيه" المنفصلة
+          gold_pound = extract_value([
+              r"جنيه\s*الذهب\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)",
+              r"الجنيه\s*الذهب\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"
+          ], latest_message)
+
+          # استخراج بقية البيانات
           ounce_usd = extract_value([r"(?:الأونصة|الاونصة|اونصة|الأوقية)\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
           buy_price = extract_value([r"الشراء\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
           sell_price = extract_value([r"البيع\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
-          usd_to_egp = extract_value([r"(?:سعر\s*الدولار|الدولار)\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
+          usd_to_egp = extract_value([r"سعر\s*الدولار\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
           sagha_usd = extract_value([r"(?:الصاغة|دولار\s*الصاغة)\D*?([\d٠-٩۰-۹][\d٠-٩۰-۹,.٬]*)"], latest_message)
 
           old_prices = {}
@@ -178,7 +184,6 @@ jobs:
           egypt_now = datetime.now(ZoneInfo("Africa/Cairo"))
           updated_at = egypt_now.strftime("%Y-%m-%d %H:%M:%S")
 
-          # تحديث الملف وإرسال التنبيه فقط عند حدوث أي تغير في البيانات
           if prices_changed or not os.path.exists(JSON_FILE):
               new_prices["updated_at"] = updated_at
               new_prices["source"] = CHANNEL_URL
