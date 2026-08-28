@@ -1,4 +1,4 @@
-Name: Update Gold Prices
+name: Update Gold Prices
 
 on:
   workflow_dispatch:
