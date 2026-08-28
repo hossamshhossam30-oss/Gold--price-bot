@@ -1172,7 +1172,7 @@ jobs:
             echo "No changes to commit."
           else
             git commit -m "Update gold prices"
-            git pull --rebase origin main
-            git push origin main
+            git pull --rebase origin HEAD
+            git push origin HEAD
             echo "prices.json pushed successfully."
           fi
