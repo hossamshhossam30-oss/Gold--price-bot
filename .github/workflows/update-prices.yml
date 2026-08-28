@@ -1,4 +1,4 @@
-name: Update Gold Prices
+Name: Update Gold Prices
 
 on:
   workflow_dispatch:
@@ -1051,9 +1051,8 @@ jobs:
 
           PY
 
-
       # ==========================================
-      # 5. Validate prices.json
+      # Validate prices.json
       # ==========================================
       - name: Validate prices.json
         run: |
@@ -1158,39 +1157,22 @@ jobs:
 
           PY
 
-
       # ==========================================
-      # 6. Commit prices.json
+      # Commit & Push prices.json
       # ==========================================
-      - name: Commit updated prices
+      - name: Commit and Push updated prices
         run: |
 
-          git config user.name \
-            "github-actions[bot]"
-
-          git config user.email \
-            "41898282+github-actions[bot]@users.noreply.github.com"
-
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add prices.json
 
-
           if git diff --cached --quiet; then
-
             echo "No changes to commit."
-
           else
-
-            git commit \
-              -m "Update gold prices"
-
-            git pull \
-              --rebase \
-              origin main
-
-            git push \
-              origin main
-
+            git commit -m "Update gold prices"
+            git pull --rebase origin main
+            git push origin main
             echo "prices.json pushed successfully."
-
           fi
