@@ -72,7 +72,7 @@ jobs:
           # SETTINGS
           # =====================================================
 
-          SOURCE_CHANNEL = "https://t.me/s/goldpricenowlive"
+          SOURCE_CHANNEL = "https://t.me/s/goldpricenowlive?before=9999999"
 
           TARGET_CHANNEL = "@yomgdyd30"
 
@@ -328,14 +328,14 @@ jobs:
           ):
 
               cache_buster = (
-                  f"{int(time.time())}-"
+                  f"&nocache={int(time.time())}-"
                   f"{os.getpid()}-"
                   f"{attempt}"
               )
 
               source_url = (
                   f"{SOURCE_CHANNEL}"
-                  f"?nocache={cache_buster}"
+                  f"{cache_buster}"
               )
 
 
