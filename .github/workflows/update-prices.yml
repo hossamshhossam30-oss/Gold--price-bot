@@ -3,6 +3,7 @@ name: Update gold prices
 on:
   workflow_dispatch:
 
+  # تشغيل تلقائي كل 5 دقائق
   schedule:
     - cron: "*/5 * * * *"
 
@@ -17,6 +18,7 @@ jobs:
   update:
     runs-on: ubuntu-latest
 
+    # منع المهمة من البقاء عالقة
     timeout-minutes: 10
 
     steps:
@@ -47,12 +49,12 @@ jobs:
           pip install requests beautifulsoup4
 
       # ==========================================
-      # 4. جلب الأسعار والنشر في قناة Telegram
+      # 4. جلب الأسعار + تحديث الموقع
+      #    + النشر في قناة Telegram الأخرى
       # ==========================================
       - name: Fetch gold prices and publish
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: "@yomgdyd30"
 
         run: |
 
@@ -61,7 +63,9 @@ jobs:
           import json
           import re
           import os
+          import sys
           import time
+
           from datetime import datetime
           from zoneinfo import ZoneInfo
 
@@ -73,22 +77,36 @@ jobs:
           # الإعدادات
           # =====================================================
 
-          SOURCE_CHANNEL = "https://t.me/s/goldpricenowlive"
+          # قناة المصدر
+          SOURCE_CHANNEL = (
+              "https://t.me/s/goldpricenowlive"
+          )
 
+          # قناة النشر
           TARGET_CHANNEL = "@yomgdyd30"
 
+          # ملف الأسعار
           JSON_FILE = "prices.json"
 
+          # عدد محاولات الاتصال بالمصدر
           MAX_SOURCE_ATTEMPTS = 5
 
+          # عدد محاولات النشر في Telegram
           MAX_TELEGRAM_ATTEMPTS = 3
 
+          # مدة انتظار الاتصال
           REQUEST_TIMEOUT = 30
 
 
+          # =====================================================
+          # Headers
+          # =====================================================
+
           HEADERS = {
+
               "User-Agent": (
-                  "Mozilla/5.0 (Linux; Android 10; K) "
+                  "Mozilla/5.0 "
+                  "(Linux; Android 10; K) "
                   "AppleWebKit/537.36 "
                   "(KHTML, like Gecko) "
                   "Chrome/131.0 Mobile Safari/537.36"
@@ -109,7 +127,7 @@ jobs:
 
 
           # =====================================================
-          # توحيد الأرقام العربية والفارسية
+          # تحويل الأرقام العربية والفارسية
           # =====================================================
 
           def normalize_digits(value):
@@ -127,10 +145,10 @@ jobs:
                   "0123456789"
               )
 
-              return str(value).translate(
-                  arabic_digits
-              ).translate(
-                  persian_digits
+              return (
+                  str(value)
+                  .translate(arabic_digits)
+                  .translate(persian_digits)
               )
 
 
@@ -204,7 +222,7 @@ jobs:
 
 
           # =====================================================
-          # استخراج رقم بعد اسم محدد
+          # استخراج السعر
           # =====================================================
 
           def extract_value(patterns, text):
@@ -214,8 +232,10 @@ jobs:
                   match = re.search(
                       pattern,
                       text,
-                      flags=re.IGNORECASE |
-                            re.UNICODE
+                      flags=(
+                          re.IGNORECASE |
+                          re.UNICODE
+                      )
                   )
 
                   if match:
@@ -231,7 +251,7 @@ jobs:
 
 
           # =====================================================
-          # التحقق من الأسعار
+          # التحقق من أسعار الذهب
           # =====================================================
 
           def validate_prices(data):
@@ -247,31 +267,55 @@ jobs:
                   value = data.get(key)
 
                   if value is None:
-                      return False, (
+
+                      return (
+                          False,
                           f"القيمة مفقودة: {key}"
                       )
 
-                  if isinstance(value, str):
-                      return False, (
+                  if isinstance(
+                      value,
+                      str
+                  ):
+
+                      return (
+                          False,
                           f"القيمة ليست رقمًا: {key}"
                       )
 
                   if value <= 0:
-                      return False, (
+
+                      return (
+                          False,
                           f"القيمة غير منطقية: "
                           f"{key}={value}"
                       )
 
 
-              p18 = data["price_gram_18k"]
-              p21 = data["price_gram_21k"]
-              p24 = data["price_gram_24k"]
+              p18 = data[
+                  "price_gram_18k"
+              ]
+
+              p21 = data[
+                  "price_gram_21k"
+              ]
+
+              p24 = data[
+                  "price_gram_24k"
+              ]
 
 
-              if not (p18 < p21 < p24):
+              # يجب أن يكون:
+              # 18 < 21 < 24
 
-                  return False, (
-                      "ترتيب أسعار الذهب غير منطقي: "
+              if not (
+                  p18 < p21 < p24
+              ):
+
+                  return (
+                      False,
+                      "ترتيب أسعار الذهب "
+                      "غير منطقي: "
                       f"18={p18}, "
                       f"21={p21}, "
                       f"24={p24}"
@@ -288,7 +332,9 @@ jobs:
           old_prices = {}
 
 
-          if os.path.exists(JSON_FILE):
+          if os.path.exists(
+              JSON_FILE
+          ):
 
               try:
 
@@ -303,13 +349,15 @@ jobs:
               except Exception as e:
 
                   print(
-                      "تحذير: تعذر قراءة prices.json:",
+                      "تحذير: تعذر قراءة "
+                      "prices.json:",
                       e
                   )
 
 
           # =====================================================
-          # جلب المصدر مع إعادة المحاولة
+          # جلب المصدر
+          # مع إعادة المحاولة
           # =====================================================
 
           html = None
@@ -326,7 +374,7 @@ jobs:
                   f"{attempt}"
               )
 
-              url = (
+              source_url = (
                   f"{SOURCE_CHANNEL}"
                   f"?nocache={cache_buster}"
               )
@@ -342,14 +390,14 @@ jobs:
               try:
 
                   response = requests.get(
-                      url,
+                      source_url,
                       headers=HEADERS,
                       timeout=REQUEST_TIMEOUT
                   )
 
 
                   print(
-                      "HTTP:",
+                      "HTTP Status:",
                       response.status_code
                   )
 
@@ -372,7 +420,7 @@ jobs:
               except Exception as e:
 
                   print(
-                      "فشل جلب المصدر:",
+                      "فشل الاتصال بالمصدر:",
                       e
                   )
 
@@ -382,23 +430,26 @@ jobs:
                       MAX_SOURCE_ATTEMPTS
                   ):
 
-                      wait_time = attempt * 5
+                      wait_seconds = (
+                          attempt * 5
+                      )
 
                       print(
-                          f"إعادة المحاولة بعد "
-                          f"{wait_time} ثانية..."
+                          f"انتظار "
+                          f"{wait_seconds} "
+                          "ثانية ثم إعادة المحاولة..."
                       )
 
                       time.sleep(
-                          wait_time
+                          wait_seconds
                       )
 
 
           if not html:
 
               raise SystemExit(
-                  "فشل جلب أسعار الذهب بعد "
-                  f"{MAX_SOURCE_ATTEMPTS} محاولات."
+                  "فشل جلب مصدر أسعار الذهب "
+                  f"بعد {MAX_SOURCE_ATTEMPTS} محاولات."
               )
 
 
@@ -433,21 +484,28 @@ jobs:
 
 
           # =====================================================
-          # العثور على أحدث رسالة أسعار
+          # البحث من الأحدث إلى الأقدم
           # =====================================================
 
           latest_message = None
 
 
-          for message in reversed(messages):
+          for message in reversed(
+              messages
+          ):
 
               text = message.get_text(
                   separator="\n",
                   strip=True
               )
 
-              text = normalize_text(text)
+              text = normalize_text(
+                  text
+              )
 
+
+              # يجب أن تحتوي الرسالة
+              # على 18 و21 و24
 
               if (
                   re.search(
@@ -474,15 +532,21 @@ jobs:
           if not latest_message:
 
               raise SystemExit(
-                  "لم يتم العثور على رسالة "
-                  "أسعار صالحة."
+                  "لم يتم العثور على "
+                  "رسالة أسعار ذهب صالحة."
               )
 
 
           print("")
-          print("========== أحدث رسالة ==========")
-          print(latest_message)
-          print("================================")
+          print(
+              "========== أحدث رسالة =========="
+          )
+          print(
+              latest_message
+          )
+          print(
+              "================================"
+          )
           print("")
 
 
@@ -492,9 +556,13 @@ jobs:
 
           price_24 = extract_value(
               [
-                  r"عيار\s*24\s*[:：\-]?\s*([\d.]+)",
+                  r"عيار\s*24"
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)",
 
-                  r"24\s*عيار\s*[:：\-]?\s*([\d.]+)"
+                  r"24\s*عيار"
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)"
               ],
               latest_message
           )
@@ -506,9 +574,13 @@ jobs:
 
           price_21 = extract_value(
               [
-                  r"عيار\s*21\s*[:：\-]?\s*([\d.]+)",
+                  r"عيار\s*21"
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)",
 
-                  r"21\s*عيار\s*[:：\-]?\s*([\d.]+)"
+                  r"21\s*عيار"
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)"
               ],
               latest_message
           )
@@ -520,9 +592,13 @@ jobs:
 
           price_18 = extract_value(
               [
-                  r"عيار\s*18\s*[:：\-]?\s*([\d.]+)",
+                  r"عيار\s*18"
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)",
 
-                  r"18\s*عيار\s*[:：\-]?\s*([\d.]+)"
+                  r"18\s*عيار"
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)"
               ],
               latest_message
           )
@@ -534,9 +610,13 @@ jobs:
 
           gold_pound = extract_value(
               [
-                  r"جنيه\s+الذهب\s*[:：\-]?\s*([\d.]+)",
+                  r"جنيه\s+الذهب"
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)",
 
-                  r"الجنيه\s+الذهب\s*[:：\-]?\s*([\d.]+)"
+                  r"الجنيه\s+الذهب"
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)"
               ],
               latest_message
           )
@@ -548,46 +628,56 @@ jobs:
 
           ounce_usd = extract_value(
               [
-                  r"الأوقية\s*(?:بالدولار)?"
-                  r"\s*[:：\-]?\s*([\d.]+)",
+                  r"الأوقية"
+                  r"\s*(?:بالدولار)?"
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)",
 
-                  r"الأونصة\s*(?:بالدولار)?"
-                  r"\s*[:：\-]?\s*([\d.]+)",
+                  r"الأونصة"
+                  r"\s*(?:بالدولار)?"
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)",
 
-                  r"الاونصة\s*(?:بالدولار)?"
-                  r"\s*[:：\-]?\s*([\d.]+)"
+                  r"الاونصة"
+                  r"\s*(?:بالدولار)?"
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)"
               ],
               latest_message
           )
 
 
           # =====================================================
-          # الشراء
+          # سعر الشراء
           # =====================================================
 
           buy_price = extract_value(
               [
                   r"سعر\s+الشراء"
-                  r"\s*[:：\-]?\s*([\d.]+)",
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)",
 
                   r"الشراء"
-                  r"\s*[:：\-]?\s*([\d.]+)"
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)"
               ],
               latest_message
           )
 
 
           # =====================================================
-          # البيع
+          # سعر البيع
           # =====================================================
 
           sell_price = extract_value(
               [
                   r"سعر\s+البيع"
-                  r"\s*[:：\-]?\s*([\d.]+)",
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)",
 
                   r"البيع"
-                  r"\s*[:：\-]?\s*([\d.]+)"
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)"
               ],
               latest_message
           )
@@ -600,7 +690,8 @@ jobs:
           usd_to_egp = extract_value(
               [
                   r"سعر\s+الدولار"
-                  r"\s*[:：\-]?\s*([\d.]+)"
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)"
               ],
               latest_message
           )
@@ -613,17 +704,19 @@ jobs:
           sagha_usd = extract_value(
               [
                   r"دولار\s+الصاغة"
-                  r"\s*[:：\-]?\s*([\d.]+)",
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)",
 
                   r"الصاغة"
-                  r"\s*[:：\-]?\s*([\d.]+)"
+                  r"\s*[:：\-]?\s*"
+                  r"([\d.]+)"
               ],
               latest_message
           )
 
 
           # =====================================================
-          # البيانات المستخرجة
+          # البيانات الجديدة
           # =====================================================
 
           extracted_data = {
@@ -657,7 +750,9 @@ jobs:
           }
 
 
-          print("البيانات المستخرجة:")
+          print(
+              "البيانات المستخرجة:"
+          )
 
           print(
               json.dumps(
@@ -669,7 +764,7 @@ jobs:
 
 
           # =====================================================
-          # التحقق
+          # التحقق من البيانات
           # =====================================================
 
           valid, validation_message = (
@@ -682,13 +777,13 @@ jobs:
           if not valid:
 
               raise SystemExit(
-                  "تم رفض الأسعار الجديدة: "
+                  "تم رفض البيانات الجديدة: "
                   + validation_message
               )
 
 
           # =====================================================
-          # إنشاء البيانات الجديدة
+          # مقارنة الأسعار القديمة بالجديدة
           # =====================================================
 
           new_prices = {}
@@ -700,12 +795,16 @@ jobs:
               extracted_data.items()
           ):
 
-              old_value = old_prices.get(key)
+              old_value = old_prices.get(
+                  key
+              )
 
 
               if new_value is not None:
 
-                  new_prices[key] = new_value
+                  new_prices[key] = (
+                      new_value
+                  )
 
 
                   if old_value != new_value:
@@ -715,9 +814,14 @@ jobs:
 
               else:
 
+                  # الاحتفاظ بالبيانات القديمة
+                  # إذا لم يتم استخراج القيمة
+
                   if old_value is not None:
 
-                      new_prices[key] = old_value
+                      new_prices[key] = (
+                          old_value
+                      )
 
                   else:
 
@@ -733,8 +837,10 @@ jobs:
           )
 
 
-          updated_at = cairo_now.strftime(
-              "%Y-%m-%d %H:%M:%S"
+          updated_at = (
+              cairo_now.strftime(
+                  "%Y-%m-%d %H:%M:%S"
+              )
           )
 
 
@@ -748,12 +854,14 @@ jobs:
 
 
           # =====================================================
-          # حفظ prices.json
+          # تحديث prices.json
           # =====================================================
 
           if (
               prices_changed
-              or not os.path.exists(JSON_FILE)
+              or not os.path.exists(
+                  JSON_FILE
+              )
           ):
 
               with open(
@@ -796,42 +904,64 @@ jobs:
               if not bot_token:
 
                   raise SystemExit(
-                      "TELEGRAM_BOT_TOKEN غير موجود."
+                      "TELEGRAM_BOT_TOKEN "
+                      "غير موجود في GitHub Secrets."
                   )
 
 
               message_text = (
-                  "💰 <b>أسعار الذهب الآن</b>\n\n"
+
+                  "💰 "
+                  "<b>أسعار الذهب الآن</b>"
+                  "\n\n"
 
                   f"💍 عيار 18: "
-                  f"<b>{new_prices['price_gram_18k']}</b> جنيه\n"
+                  f"<b>"
+                  f"{new_prices['price_gram_18k']}"
+                  f"</b> جنيه\n"
 
                   f"💍 عيار 21: "
-                  f"<b>{new_prices['price_gram_21k']}</b> جنيه\n"
+                  f"<b>"
+                  f"{new_prices['price_gram_21k']}"
+                  f"</b> جنيه\n"
 
                   f"💍 عيار 24: "
-                  f"<b>{new_prices['price_gram_24k']}</b> جنيه\n\n"
+                  f"<b>"
+                  f"{new_prices['price_gram_24k']}"
+                  f"</b> جنيه\n\n"
 
                   f"💎 جنيه الذهب: "
-                  f"<b>{new_prices.get('gold_pound', 'غير متوفر')}</b> جنيه\n"
+                  f"<b>"
+                  f"{new_prices.get('gold_pound', 'غير متوفر')}"
+                  f"</b> جنيه\n"
 
                   f"📊 الأوقية بالدولار: "
-                  f"<b>{new_prices.get('ounce_usd', 'غير متوفر')}</b> دولار\n\n"
+                  f"<b>"
+                  f"{new_prices.get('ounce_usd', 'غير متوفر')}"
+                  f"</b> دولار\n\n"
 
                   f"🌟 سعر الشراء: "
-                  f"<b>{new_prices.get('buy_price', 'غير متوفر')}</b>\n"
+                  f"<b>"
+                  f"{new_prices.get('buy_price', 'غير متوفر')}"
+                  f"</b>\n"
 
                   f"🌟 سعر البيع: "
-                  f"<b>{new_prices.get('sell_price', 'غير متوفر')}</b>\n\n"
+                  f"<b>"
+                  f"{new_prices.get('sell_price', 'غير متوفر')}"
+                  f"</b>\n\n"
 
                   f"💵 سعر الدولار: "
-                  f"<b>{new_prices.get('usd_to_egp', 'غير متوفر')}</b> جنيه\n"
+                  f"<b>"
+                  f"{new_prices.get('usd_to_egp', 'غير متوفر')}"
+                  f"</b> جنيه\n"
 
                   f"💵 دولار الصاغة: "
-                  f"<b>{new_prices.get('sagha_usd', 'غير متوفر')}</b> جنيه\n\n"
+                  f"<b>"
+                  f"{new_prices.get('sagha_usd', 'غير متوفر')}"
+                  f"</b> جنيه\n\n"
 
-                  f"🕐 <b>آخر تحديث:</b> "
-                  f"{updated_at}"
+                  f"🕐 آخر تحديث: "
+                  f"<b>{updated_at}</b>"
               )
 
 
@@ -860,6 +990,10 @@ jobs:
               telegram_sent = False
 
 
+              # ================================================
+              # إعادة محاولة النشر في Telegram
+              # ================================================
+
               for attempt in range(
                   1,
                   MAX_TELEGRAM_ATTEMPTS + 1
@@ -883,6 +1017,12 @@ jobs:
                       )
 
 
+                      print(
+                          "Telegram HTTP:",
+                          telegram_response.status_code
+                      )
+
+
                       if (
                           telegram_response.status_code
                           == 200
@@ -900,8 +1040,20 @@ jobs:
                               telegram_sent = True
 
                               print(
+                                  "================================"
+                              )
+
+                              print(
                                   "تم النشر بنجاح "
-                                  "في @yomgdyd30."
+                                  "في قناة:"
+                              )
+
+                              print(
+                                  TARGET_CHANNEL
+                              )
+
+                              print(
+                                  "================================"
                               )
 
                               break
@@ -945,17 +1097,34 @@ jobs:
               )
 
 
+          # =====================================================
+          # النهاية
+          # =====================================================
+
           print("")
-          print("================================")
-          print("اكتملت عملية تحديث أسعار الذهب.")
+          print(
+              "================================"
+          )
+
+          print(
+              "اكتملت عملية تحديث أسعار الذهب."
+          )
+
           print(
               f"وقت التحديث: {updated_at}"
           )
+
+          print(
+              f"المصدر: {SOURCE_CHANNEL}"
+          )
+
           print(
               f"قناة النشر: {TARGET_CHANNEL}"
           )
-          print("================================")
 
+          print(
+              "================================"
+          )
 
           PY
 
@@ -976,10 +1145,12 @@ jobs:
           FILE = "prices.json"
 
 
-          if not os.path.exists(FILE):
+          if not os.path.exists(
+              FILE
+          ):
 
               print(
-                  "ERROR: prices.json غير موجود"
+                  "ERROR: prices.json غير موجود."
               )
 
               sys.exit(1)
@@ -1009,7 +1180,8 @@ jobs:
               if value is None:
 
                   print(
-                      f"ERROR: القيمة مفقودة: {key}"
+                      f"ERROR: القيمة مفقودة: "
+                      f"{key}"
                   )
 
                   sys.exit(1)
@@ -1031,7 +1203,7 @@ jobs:
               if value <= 0:
 
                   print(
-                      f"ERROR: قيمة غير صالحة: "
+                      f"ERROR: القيمة غير صالحة: "
                       f"{key}={value}"
                   )
 
@@ -1056,22 +1228,30 @@ jobs:
           ):
 
               print(
-                  "ERROR: ترتيب العيارات "
-                  "غير منطقي."
+                  "ERROR: ترتيب أسعار "
+                  "العيارات غير منطقي."
               )
 
               sys.exit(1)
 
 
           print(
-              "prices.json صالح."
+              "OK: prices.json صالح."
+          )
+
+          print(
+              json.dumps(
+                  data,
+                  ensure_ascii=False,
+                  indent=2
+              )
           )
 
           PY
 
 
       # ==========================================
-      # 6. حفظ الأسعار في GitHub
+      # 6. حفظ prices.json في GitHub
       # ==========================================
       - name: Commit updated prices
         run: |
@@ -1088,7 +1268,7 @@ jobs:
 
           if git diff --cached --quiet; then
 
-            echo "لا توجد تغييرات."
+            echo "لا توجد تغييرات في prices.json."
 
           else
 
@@ -1102,6 +1282,6 @@ jobs:
             git push \
               origin main
 
-            echo "تم تحديث GitHub بنجاح."
+            echo "تم رفع الأسعار الجديدة إلى GitHub."
 
           fi
