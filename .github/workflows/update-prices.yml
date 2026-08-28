@@ -2,7 +2,6 @@ name: Update Gold Prices
 
 on:
   workflow_dispatch:
-
   schedule:
     - cron: "*/5 * * * *"
 
@@ -16,1158 +15,256 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-
     timeout-minutes: 10
 
     steps:
-
-      # ==========================================
-      # Checkout
-      # ==========================================
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # ==========================================
-      # Python
-      # ==========================================
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
-      # ==========================================
-      # Libraries
-      # ==========================================
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4
 
-      # ==========================================
-      # Update prices
-      # ==========================================
       - name: Fetch and update gold prices
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
-
           python - <<'PY'
-
           import json
           import os
           import re
           import sys
           import time
-
           from datetime import datetime
           from zoneinfo import ZoneInfo
-
           import requests
           from bs4 import BeautifulSoup
 
-
-          # =====================================================
-          # SETTINGS
-          # =====================================================
-
           SOURCE_CHANNEL = "https://t.me/s/goldpricenowlive?before=9999999"
-
           TARGET_CHANNEL = "@yomgdyd30"
-
           JSON_FILE = "prices.json"
-
           SOURCE_ATTEMPTS = 5
-
           TELEGRAM_ATTEMPTS = 3
-
           REQUEST_TIMEOUT = 30
-
 
           HEADERS = {
               "User-Agent": (
-                  "Mozilla/5.0 "
-                  "(Linux; Android 10; K) "
-                  "AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) "
+                  "Mozilla/5.0 (Linux; Android 10; K) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) "
                   "Chrome/131.0 Mobile Safari/537.36"
               ),
-
-              "Cache-Control":
-                  "no-cache, no-store, max-age=0",
-
-              "Pragma":
-                  "no-cache",
-
-              "Accept-Language":
-                  "ar,en-US;q=0.9,en;q=0.8",
-
-              "Connection":
-                  "close"
+              "Cache-Control": "no-cache, no-store, max-age=0",
+              "Pragma": "no-cache",
+              "Accept-Language": "ar,en-US;q=0.9,en;q=0.8",
+              "Connection": "close"
           }
 
-
-          # =====================================================
-          # NORMALIZE DIGITS
-          # =====================================================
-
           def normalize_digits(value):
-
               if value is None:
                   return None
-
-              arabic = str.maketrans(
-                  "٠١٢٣٤٥٦٧٨٩",
-                  "0123456789"
-              )
-
-              persian = str.maketrans(
-                  "۰۱۲۳۴۵۶۷۸۹",
-                  "0123456789"
-              )
-
-              return (
-                  str(value)
-                  .translate(arabic)
-                  .translate(persian)
-              )
-
-
-          # =====================================================
-          # CLEAN NUMBER
-          # =====================================================
+              arabic = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+              persian = str.maketrans("۰۱۲۳۴۵۶۷۸۹", "0123456789")
+              return str(value).translate(arabic).translate(persian)
 
           def clean_number(value):
-
               if value is None:
                   return None
-
               value = normalize_digits(value)
-
               value = (
-                  value
-                  .replace(",", "")
+                  value.replace(",", "")
                   .replace("٬", "")
                   .replace("٫", ".")
                   .replace(" ", "")
                   .strip()
               )
-
-              value = re.sub(
-                  r"[^\d.]",
-                  "",
-                  value
-              )
-
+              value = re.sub(r"[^\d.]", "", value)
               if not value:
                   return None
-
               try:
-
                   number = float(value)
-
                   if number.is_integer():
                       return int(number)
-
                   return number
-
               except ValueError:
-
                   return None
 
-
-          # =====================================================
-          # NORMALIZE TEXT
-          # =====================================================
-
           def normalize_text(text):
-
               if not text:
                   return ""
-
               text = normalize_digits(text)
-
-              text = re.sub(
-                  r"[ \t]+",
-                  " ",
-                  text
-              )
-
-              text = re.sub(
-                  r"\n+",
-                  "\n",
-                  text
-              )
-
+              text = re.sub(r"[ \t]+", " ", text)
+              text = re.sub(r"\n+", "\n", text)
               return text.strip()
 
-
-          # =====================================================
-          # EXTRACT VALUE
-          # =====================================================
-
           def extract_value(patterns, text):
-
               for pattern in patterns:
-
-                  match = re.search(
-                      pattern,
-                      text,
-                      flags=(
-                          re.IGNORECASE |
-                          re.UNICODE
-                      )
-                  )
-
+                  match = re.search(pattern, text, flags=re.IGNORECASE | re.UNICODE)
                   if match:
-
-                      value = clean_number(
-                          match.group(1)
-                      )
-
+                      value = clean_number(match.group(1))
                       if value is not None:
                           return value
-
               return None
 
-
-          # =====================================================
-          # VALIDATE PRICES
-          # =====================================================
-
           def validate_prices(data):
-
-              required = [
-                  "price_gram_24k",
-                  "price_gram_21k",
-                  "price_gram_18k"
-              ]
-
+              required = ["price_gram_24k", "price_gram_21k", "price_gram_18k"]
               for key in required:
-
                   value = data.get(key)
+                  if value is None or isinstance(value, str) or value <= 0:
+                      return False, f"Invalid value: {key}"
 
-                  if value is None:
-                      return False, (
-                          f"Missing value: {key}"
-                      )
-
-                  if isinstance(value, str):
-                      return False, (
-                          f"Invalid value: {key}"
-                      )
-
-                  if value <= 0:
-                      return False, (
-                          f"Invalid price: "
-                          f"{key}={value}"
-                      )
-
-
-              p18 = data["price_gram_18k"]
-
-              p21 = data["price_gram_21k"]
-
-              p24 = data["price_gram_24k"]
-
-
-              if not (
-                  p18 < p21 < p24
-              ):
-
-                  return False, (
-                      "Gold prices order is invalid: "
-                      f"18={p18}, "
-                      f"21={p21}, "
-                      f"24={p24}"
-                  )
-
-
+              p18, p21, p24 = data["price_gram_18k"], data["price_gram_21k"], data["price_gram_24k"]
+              if not (p18 < p21 < p24):
+                  return False, f"Invalid order: 18={p18}, 21={p21}, 24={p24}"
               return True, "OK"
 
-
-          # =====================================================
-          # LOAD OLD PRICES
-          # =====================================================
-
           old_prices = {}
-
-
           if os.path.exists(JSON_FILE):
-
               try:
-
-                  with open(
-                      JSON_FILE,
-                      "r",
-                      encoding="utf-8"
-                  ) as f:
-
+                  with open(JSON_FILE, "r", encoding="utf-8") as f:
                       old_prices = json.load(f)
-
               except Exception as e:
-
-                  print(
-                      "Warning: could not read "
-                      "old prices.json:",
-                      e
-                  )
-
-
-          # =====================================================
-          # FETCH SOURCE
-          # =====================================================
+                  print("Warning reading old JSON:", e)
 
           html = None
-
-
-          for attempt in range(
-              1,
-              SOURCE_ATTEMPTS + 1
-          ):
-
-              cache_buster = (
-                  f"&nocache={int(time.time())}-"
-                  f"{os.getpid()}-"
-                  f"{attempt}"
-              )
-
-              source_url = (
-                  f"{SOURCE_CHANNEL}"
-                  f"{cache_buster}"
-              )
-
-
-              print(
-                  f"Fetching source "
-                  f"{attempt}/{SOURCE_ATTEMPTS}"
-              )
-
-
+          for attempt in range(1, SOURCE_ATTEMPTS + 1):
+              cache_buster = f"&nocache={int(time.time())}-{os.getpid()}-{attempt}"
+              source_url = f"{SOURCE_CHANNEL}{cache_buster}"
+              print(f"Fetching source {attempt}/{SOURCE_ATTEMPTS}")
               try:
-
-                  response = requests.get(
-                      source_url,
-                      headers=HEADERS,
-                      timeout=REQUEST_TIMEOUT
-                  )
-
-
-                  print(
-                      "HTTP status:",
-                      response.status_code
-                  )
-
-
+                  response = requests.get(source_url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
                   response.raise_for_status()
-
-
-                  if not response.text:
-
-                      raise RuntimeError(
-                          "Empty response from source"
-                      )
-
-
-                  html = response.text
-
-                  break
-
-
+                  if response.text:
+                      html = response.text
+                      break
               except Exception as e:
-
-                  print(
-                      "Source error:",
-                      e
-                  )
-
-
-                  if (
-                      attempt <
-                      SOURCE_ATTEMPTS
-                  ):
-
-                      wait = attempt * 5
-
-                      print(
-                          f"Retrying after "
-                          f"{wait} seconds..."
-                      )
-
-                      time.sleep(wait)
-
+                  print("Source error:", e)
+                  if attempt < SOURCE_ATTEMPTS:
+                      time.sleep(attempt * 5)
 
           if not html:
+              raise SystemExit("Could not fetch gold prices.")
 
-              raise SystemExit(
-                  "Could not fetch gold prices "
-                  "after multiple attempts."
-              )
-
-
-          # =====================================================
-          # PARSE TELEGRAM
-          # =====================================================
-
-          soup = BeautifulSoup(
-              html,
-              "html.parser"
-          )
-
-
-          messages = soup.find_all(
-              "div",
-              class_="tgme_widget_message_text"
-          )
-
-
+          soup = BeautifulSoup(html, "html.parser")
+          messages = soup.find_all("div", class_="tgme_widget_message_text")
           if not messages:
-
-              raise SystemExit(
-                  "No Telegram messages found."
-              )
-
-
-          print(
-              f"Found {len(messages)} messages."
-          )
-
-
-          # =====================================================
-          # FIND LATEST VALID PRICE MESSAGE
-          # =====================================================
+              raise SystemExit("No Telegram messages found.")
 
           latest_message = None
-
-
           for message in reversed(messages):
-
-              text = message.get_text(
-                  separator="\n",
-                  strip=True
-              )
-
-              text = normalize_text(text)
-
-
-              if (
-                  re.search(
-                      r"\b24\b",
-                      text
-                  )
-                  and
-                  re.search(
-                      r"\b21\b",
-                      text
-                  )
-                  and
-                  re.search(
-                      r"\b18\b",
-                      text
-                  )
-              ):
-
+              text = normalize_text(message.get_text(separator="\n", strip=True))
+              if re.search(r"\b24\b", text) and re.search(r"\b21\b", text) and re.search(r"\b18\b", text):
                   latest_message = text
-
                   break
 
-
           if not latest_message:
+              raise SystemExit("No valid gold price message found.")
 
-              raise SystemExit(
-                  "No valid gold price message found."
-              )
-
-
-          print("")
-          print(
-              "========== SOURCE MESSAGE =========="
-          )
-          print(latest_message)
-          print(
-              "====================================="
-          )
-          print("")
-
-
-          # =====================================================
-          # EXTRACT 24K
-          # =====================================================
-
-          price_24 = extract_value(
-              [
-                  r"عيار\s*24"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)",
-
-                  r"24\s*عيار"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)"
-              ],
-              latest_message
-          )
-
-
-          # =====================================================
-          # EXTRACT 21K
-          # =====================================================
-
-          price_21 = extract_value(
-              [
-                  r"عيار\s*21"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)",
-
-                  r"21\s*عيار"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)"
-              ],
-              latest_message
-          )
-
-
-          # =====================================================
-          # EXTRACT 18K
-          # =====================================================
-
-          price_18 = extract_value(
-              [
-                  r"عيار\s*18"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)",
-
-                  r"18\s*عيار"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)"
-              ],
-              latest_message
-          )
-
-
-          # =====================================================
-          # GOLD POUND
-          # =====================================================
-
-          gold_pound = extract_value(
-              [
-                  r"جنيه\s+الذهب"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)",
-
-                  r"الجنيه\s+الذهب"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)"
-              ],
-              latest_message
-          )
-
-
-          # =====================================================
-          # OUNCE
-          # =====================================================
-
-          ounce_usd = extract_value(
-              [
-                  r"الأوقية"
-                  r"\s*(?:بالدولار)?"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)",
-
-                  r"الأونصة"
-                  r"\s*(?:بالدولار)?"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)",
-
-                  r"الاونصة"
-                  r"\s*(?:بالدولار)?"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)"
-              ],
-              latest_message
-          )
-
-
-          # =====================================================
-          # BUY
-          # =====================================================
-
-          buy_price = extract_value(
-              [
-                  r"سعر\s+الشراء"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)",
-
-                  r"الشراء"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)"
-              ],
-              latest_message
-          )
-
-
-          # =====================================================
-          # SELL
-          # =====================================================
-
-          sell_price = extract_value(
-              [
-                  r"سعر\s+البيع"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)",
-
-                  r"البيع"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)"
-              ],
-              latest_message
-          )
-
-
-          # =====================================================
-          # USD / EGP
-          # =====================================================
-
-          usd_to_egp = extract_value(
-              [
-                  r"سعر\s+الدولار"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)"
-              ],
-              latest_message
-          )
-
-
-          # =====================================================
-          # SAGHA USD
-          # =====================================================
-
-          sagha_usd = extract_value(
-              [
-                  r"دولار\s+الصاغة"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)",
-
-                  r"الصاغة"
-                  r"\s*[:：\-]?\s*"
-                  r"([\d.]+)"
-              ],
-              latest_message
-          )
-
-
-          # =====================================================
-          # NEW DATA
-          # =====================================================
+          price_24 = extract_value([r"عيار\s*24\s*[:：\-]?\s*([\d.]+)", r"24\s*عيار\s*[:：\-]?\s*([\d.]+)"], latest_message)
+          price_21 = extract_value([r"عيار\s*21\s*[:：\-]?\s*([\d.]+)", r"21\s*عيار\s*[:：\-]?\s*([\d.]+)"], latest_message)
+          price_18 = extract_value([r"عيار\s*18\s*[:：\-]?\s*([\d.]+)", r"18\s*عيار\s*[:：\-]?\s*([\d.]+)"], latest_message)
+          gold_pound = extract_value([r"جنيه\s+الذهب\s*[:：\-]?\s*([\d.]+)", r"الجنيه\s+الذهب\s*[:：\-]?\s*([\d.]+)"], latest_message)
+          ounce_usd = extract_value([r"الأوقية\s*(?:بالدولار)?\s*[:：\-]?\s*([\d.]+)", r"الأونصة\s*(?:بالدولار)?\s*[:：\-]?\s*([\d.]+)"], latest_message)
+          buy_price = extract_value([r"سعر\s+الشراء\s*[:：\-]?\s*([\d.]+)", r"الشراء\s*[:：\-]?\s*([\d.]+)"], latest_message)
+          sell_price = extract_value([r"سعر\s+البيع\s*[:：\-]?\s*([\d.]+)", r"البيع\s*[:：\-]?\s*([\d.]+)"], latest_message)
+          usd_to_egp = extract_value([r"سعر\s+الدولار\s*[:：\-]?\s*([\d.]+)"], latest_message)
+          sagha_usd = extract_value([r"دولار\s+الصاغة\s*[:：\-]?\s*([\d.]+)", r"الصاغة\s*[:：\-]?\s*([\d.]+)"], latest_message)
 
           extracted_data = {
-
-              "price_gram_24k":
-                  price_24,
-
-              "price_gram_21k":
-                  price_21,
-
-              "price_gram_18k":
-                  price_18,
-
-              "gold_pound":
-                  gold_pound,
-
-              "ounce_usd":
-                  ounce_usd,
-
-              "buy_price":
-                  buy_price,
-
-              "sell_price":
-                  sell_price,
-
-              "usd_to_egp":
-                  usd_to_egp,
-
-              "sagha_usd":
-                  sagha_usd
+              "price_gram_24k": price_24,
+              "price_gram_21k": price_21,
+              "price_gram_18k": price_18,
+              "gold_pound": gold_pound,
+              "ounce_usd": ounce_usd,
+              "buy_price": buy_price,
+              "sell_price": sell_price,
+              "usd_to_egp": usd_to_egp,
+              "sagha_usd": sagha_usd
           }
 
-
-          print(
-              "Extracted data:"
-          )
-
-          print(
-              json.dumps(
-                  extracted_data,
-                  ensure_ascii=False,
-                  indent=2
-              )
-          )
-
-
-          # =====================================================
-          # VALIDATE
-          # =====================================================
-
-          valid, message = validate_prices(
-              extracted_data
-          )
-
-
+          valid, msg = validate_prices(extracted_data)
           if not valid:
-
-              raise SystemExit(
-                  "Price validation failed: "
-                  + message
-              )
-
-
-          # =====================================================
-          # COMPARE OLD / NEW
-          # =====================================================
+              raise SystemExit("Price validation failed: " + msg)
 
           new_prices = {}
-
           prices_changed = False
-
-
-          for key, new_value in (
-              extracted_data.items()
-          ):
-
-              old_value = old_prices.get(
-                  key
-              )
-
-
-              if new_value is not None:
-
-                  new_prices[key] = (
-                      new_value
-                  )
-
-
-                  if old_value != new_value:
-
+          for key, new_val in extracted_data.items():
+              old_val = old_prices.get(key)
+              if new_val is not None:
+                  new_prices[key] = new_val
+                  if old_val != new_val:
                       prices_changed = True
-
-
               else:
+                  new_prices[key] = old_val
 
-                  if old_value is not None:
+          cairo_now = datetime.now(ZoneInfo("Africa/Cairo"))
+          updated_at = cairo_now.strftime("%Y-%m-%d %H:%M:%S")
+          new_prices["updated_at"] = updated_at
+          new_prices["source"] = SOURCE_CHANNEL
 
-                      new_prices[key] = (
-                          old_value
-                      )
-
-                  else:
-
-                      new_prices[key] = None
-
-
-          # =====================================================
-          # CAIRO TIME
-          # =====================================================
-
-          cairo_now = datetime.now(
-              ZoneInfo("Africa/Cairo")
-          )
-
-
-          updated_at = (
-              cairo_now.strftime(
-                  "%Y-%m-%d %H:%M:%S"
-              )
-          )
-
-
-          new_prices["updated_at"] = (
-              updated_at
-          )
-
-          new_prices["source"] = (
-              SOURCE_CHANNEL
-          )
-
-
-          # =====================================================
-          # WRITE JSON
-          # =====================================================
-
-          if (
-              prices_changed
-              or not os.path.exists(
-                  JSON_FILE
-              )
-          ):
-
-              with open(
-                  JSON_FILE,
-                  "w",
-                  encoding="utf-8"
-              ) as f:
-
-                  json.dump(
-                      new_prices,
-                      f,
-                      ensure_ascii=False,
-                      indent=2
-                  )
-
-
-              print(
-                  "prices.json updated."
-              )
-
-
+          if prices_changed or not os.path.exists(JSON_FILE):
+              with open(JSON_FILE, "w", encoding="utf-8") as f:
+                  json.dump(new_prices, f, ensure_ascii=False, indent=2)
+              print("prices.json updated.")
           else:
-
-              print(
-                  "No price change."
-              )
-
-
-          # =====================================================
-          # TELEGRAM PUBLISH
-          # =====================================================
+              print("No price change.")
 
           if prices_changed:
-
-              bot_token = os.getenv(
-                  "TELEGRAM_BOT_TOKEN"
-              )
-
-
-              if not bot_token:
-
-                  raise SystemExit(
-                      "TELEGRAM_BOT_TOKEN "
-                      "is missing."
+              bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+              if bot_token:
+                  message_text = (
+                      "💰 <b>أسعار الذهب الآن</b>\n\n"
+                      f"💍 عيار 18: <b>{new_prices['price_gram_18k']}</b> جنيه\n"
+                      f"💍 عيار 21: <b>{new_prices['price_gram_21k']}</b> جنيه\n"
+                      f"💍 عيار 24: <b>{new_prices['price_gram_24k']}</b> جنيه\n\n"
+                      f"💎 جنيه الذهب: <b>{new_prices.get('gold_pound', 'غير متوفر')}</b> جنيه\n"
+                      f"📊 الأوقية بالدولار: <b>{new_prices.get('ounce_usd', 'غير متوفر')}</b> دولار\n\n"
+                      f"🌟 سعر الشراء: <b>{new_prices.get('buy_price', 'غير متوفر')}</b>\n"
+                      f"🌟 سعر البيع: <b>{new_prices.get('sell_price', 'غير متوفر')}</b>\n\n"
+                      f"💵 سعر الدولار: <b>{new_prices.get('usd_to_egp', 'غير متوفر')}</b> جنيه\n"
+                      f"💵 دولار الصاغة: <b>{new_prices.get('sagha_usd', 'غير متوفر')}</b> جنيه\n\n"
+                      f"🕐 آخر تحديث: <b>{updated_at}</b>"
                   )
-
-
-              message_text = (
-
-                  "💰 "
-                  "<b>أسعار الذهب الآن</b>"
-                  "\n\n"
-
-                  f"💍 عيار 18: "
-                  f"<b>"
-                  f"{new_prices['price_gram_18k']}"
-                  f"</b> جنيه\n"
-
-                  f"💍 عيار 21: "
-                  f"<b>"
-                  f"{new_prices['price_gram_21k']}"
-                  f"</b> جنيه\n"
-
-                  f"💍 عيار 24: "
-                  f"<b>"
-                  f"{new_prices['price_gram_24k']}"
-                  f"</b> جنيه\n\n"
-
-                  f"💎 جنيه الذهب: "
-                  f"<b>"
-                  f"{new_prices.get('gold_pound', 'غير متوفر')}"
-                  f"</b> جنيه\n"
-
-                  f"📊 الأوقية بالدولار: "
-                  f"<b>"
-                  f"{new_prices.get('ounce_usd', 'غير متوفر')}"
-                  f"</b> دولار\n\n"
-
-                  f"🌟 سعر الشراء: "
-                  f"<b>"
-                  f"{new_prices.get('buy_price', 'غير متوفر')}"
-                  f"</b>\n"
-
-                  f"🌟 سعر البيع: "
-                  f"<b>"
-                  f"{new_prices.get('sell_price', 'غير متوفر')}"
-                  f"</b>\n\n"
-
-                  f"💵 سعر الدولار: "
-                  f"<b>"
-                  f"{new_prices.get('usd_to_egp', 'غير متوفر')}"
-                  f"</b> جنيه\n"
-
-                  f"💵 دولار الصاغة: "
-                  f"<b>"
-                  f"{new_prices.get('sagha_usd', 'غير متوفر')}"
-                  f"</b> جنيه\n\n"
-
-                  f"🕐 آخر تحديث: "
-                  f"<b>{updated_at}</b>"
-              )
-
-
-              telegram_url = (
-                  "https://api.telegram.org/"
-                  f"bot{bot_token}/sendMessage"
-              )
-
-
-              payload = {
-
-                  "chat_id":
-                      TARGET_CHANNEL,
-
-                  "text":
-                      message_text,
-
-                  "parse_mode":
-                      "HTML",
-
-                  "disable_web_page_preview":
-                      True
-              }
-
-
-              sent = False
-
-
-              for attempt in range(
-                  1,
-                  TELEGRAM_ATTEMPTS + 1
-              ):
-
-                  print(
-                      f"Telegram publish "
-                      f"{attempt}/"
-                      f"{TELEGRAM_ATTEMPTS}"
-                  )
-
-
-                  try:
-
-                      telegram_response = (
-                          requests.post(
-                              telegram_url,
-                              data=payload,
-                              timeout=20
-                          )
-                      )
-
-
-                      print(
-                          "Telegram status:",
-                          telegram_response.status_code
-                      )
-
-
-                      if (
-                          telegram_response.status_code
-                          == 200
-                      ):
-
-                          result = (
-                              telegram_response.json()
-                          )
-
-
-                          if result.get(
-                              "ok"
-                          ):
-
-                              sent = True
-
-                              print(
-                                  "Successfully "
-                                  "published to "
-                                  f"{TARGET_CHANNEL}"
-                              )
-
+                  telegram_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                  payload = {"chat_id": TARGET_CHANNEL, "text": message_text, "parse_mode": "HTML", "disable_web_page_preview": True}
+                  for attempt in range(1, TELEGRAM_ATTEMPTS + 1):
+                      try:
+                          res = requests.post(telegram_url, data=payload, timeout=20)
+                          if res.status_code == 200 and res.json().get("ok"):
+                              print("Successfully published to Telegram")
                               break
-
-
-                      print(
-                          "Telegram error:",
-                          telegram_response.text
-                      )
-
-
-                  except Exception as e:
-
-                      print(
-                          "Telegram connection error:",
-                          e
-                      )
-
-
-                  if (
-                      attempt <
-                      TELEGRAM_ATTEMPTS
-                  ):
-
+                      except Exception as e:
+                          print("Telegram error:", e)
                       time.sleep(5)
 
-
-              if not sent:
-
-                  raise SystemExit(
-                      "Telegram publishing failed."
-                  )
-
-
-          else:
-
-              print(
-                  "Price did not change."
-              )
-
-              print(
-                  "No Telegram message sent."
-              )
-
-
-          # =====================================================
-          # FINISHED
-          # =====================================================
-
-          print("")
-          print(
-              "=========================================="
-          )
-
-          print(
-              "GOLD PRICE UPDATE FINISHED"
-          )
-
-          print(
-              f"Time: {updated_at}"
-          )
-
-          print(
-              f"Source: {SOURCE_CHANNEL}"
-          )
-
-          print(
-              f"Target: {TARGET_CHANNEL}"
-          )
-
-          print(
-              "=========================================="
-          )
-
           PY
 
-      # ==========================================
-      # Validate prices.json
-      # ==========================================
       - name: Validate prices.json
         run: |
-
           python - <<'PY'
-
-          import json
-          import os
-          import sys
-
-
-          FILE = "prices.json"
-
-
-          if not os.path.exists(FILE):
-
-              print(
-                  "ERROR: prices.json does not exist."
-              )
-
+          import json, os, sys
+          if not os.path.exists("prices.json"):
               sys.exit(1)
-
-
-          with open(
-              FILE,
-              "r",
-              encoding="utf-8"
-          ) as f:
-
+          with open("prices.json", "r", encoding="utf-8") as f:
               data = json.load(f)
-
-
-          required = [
-              "price_gram_24k",
-              "price_gram_21k",
-              "price_gram_18k"
-          ]
-
-
-          for key in required:
-
-              value = data.get(key)
-
-
-              if value is None:
-
-                  print(
-                      f"ERROR: missing {key}"
-                  )
-
-                  sys.exit(1)
-
-
-              if isinstance(
-                  value,
-                  str
-              ):
-
-                  print(
-                      f"ERROR: {key} is not numeric"
-                  )
-
-                  sys.exit(1)
-
-
-              if value <= 0:
-
-                  print(
-                      f"ERROR: invalid {key}"
-                  )
-
-                  sys.exit(1)
-
-
-          p18 = data[
-              "price_gram_18k"
-          ]
-
-          p21 = data[
-              "price_gram_21k"
-          ]
-
-          p24 = data[
-              "price_gram_24k"
-          ]
-
-
-          if not (
-              p18 < p21 < p24
-          ):
-
-              print(
-                  "ERROR: invalid gold price order."
-              )
-
+          p18, p21, p24 = data.get("price_gram_18k"), data.get("price_gram_21k"), data.get("price_gram_24k")
+          if not (p18 and p21 and p24 and p18 < p21 < p24):
               sys.exit(1)
-
-
-          print(
-              "prices.json validation OK."
-          )
-
+          print("prices.json validation OK.")
           PY
 
-      # ==========================================
-      # Commit & Push prices.json
-      # ==========================================
       - name: Commit and Push updated prices
         run: |
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           git add prices.json
-
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
