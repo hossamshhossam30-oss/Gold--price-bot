@@ -1,9 +1,8 @@
-name: Update gold prices
+name: Update Gold Prices
 
 on:
   workflow_dispatch:
 
-  # تشغيل تلقائي كل 5 دقائق
   schedule:
     - cron: "*/5 * * * *"
 
@@ -18,22 +17,20 @@ jobs:
   update:
     runs-on: ubuntu-latest
 
-    # منع المهمة من البقاء عالقة
     timeout-minutes: 10
 
     steps:
 
       # ==========================================
-      # 1. تحميل المستودع
+      # Checkout
       # ==========================================
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: main
 
       # ==========================================
-      # 2. إعداد Python
+      # Python
       # ==========================================
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -41,7 +38,7 @@ jobs:
           python-version: "3.x"
 
       # ==========================================
-      # 3. تثبيت المكتبات
+      # Libraries
       # ==========================================
       - name: Install dependencies
         run: |
@@ -49,20 +46,18 @@ jobs:
           pip install requests beautifulsoup4
 
       # ==========================================
-      # 4. جلب الأسعار + تحديث الموقع
-      #    + النشر في قناة Telegram الأخرى
+      # Update prices
       # ==========================================
-      - name: Fetch gold prices and publish
+      - name: Fetch and update gold prices
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-
         run: |
 
           python - <<'PY'
 
           import json
-          import re
           import os
+          import re
           import sys
           import time
 
@@ -74,36 +69,23 @@ jobs:
 
 
           # =====================================================
-          # الإعدادات
+          # SETTINGS
           # =====================================================
 
-          # قناة المصدر
-          SOURCE_CHANNEL = (
-              "https://t.me/s/goldpricenowlive"
-          )
+          SOURCE_CHANNEL = "https://t.me/s/goldpricenowlive"
 
-          # قناة النشر
           TARGET_CHANNEL = "@yomgdyd30"
 
-          # ملف الأسعار
           JSON_FILE = "prices.json"
 
-          # عدد محاولات الاتصال بالمصدر
-          MAX_SOURCE_ATTEMPTS = 5
+          SOURCE_ATTEMPTS = 5
 
-          # عدد محاولات النشر في Telegram
-          MAX_TELEGRAM_ATTEMPTS = 3
+          TELEGRAM_ATTEMPTS = 3
 
-          # مدة انتظار الاتصال
           REQUEST_TIMEOUT = 30
 
 
-          # =====================================================
-          # Headers
-          # =====================================================
-
           HEADERS = {
-
               "User-Agent": (
                   "Mozilla/5.0 "
                   "(Linux; Android 10; K) "
@@ -127,33 +109,33 @@ jobs:
 
 
           # =====================================================
-          # تحويل الأرقام العربية والفارسية
+          # NORMALIZE DIGITS
           # =====================================================
 
           def normalize_digits(value):
 
               if value is None:
-                  return value
+                  return None
 
-              arabic_digits = str.maketrans(
+              arabic = str.maketrans(
                   "٠١٢٣٤٥٦٧٨٩",
                   "0123456789"
               )
 
-              persian_digits = str.maketrans(
+              persian = str.maketrans(
                   "۰۱۲۳۴۵۶۷۸۹",
                   "0123456789"
               )
 
               return (
                   str(value)
-                  .translate(arabic_digits)
-                  .translate(persian_digits)
+                  .translate(arabic)
+                  .translate(persian)
               )
 
 
           # =====================================================
-          # تنظيف الرقم
+          # CLEAN NUMBER
           # =====================================================
 
           def clean_number(value):
@@ -196,7 +178,7 @@ jobs:
 
 
           # =====================================================
-          # تنظيف النص
+          # NORMALIZE TEXT
           # =====================================================
 
           def normalize_text(text):
@@ -222,7 +204,7 @@ jobs:
 
 
           # =====================================================
-          # استخراج السعر
+          # EXTRACT VALUE
           # =====================================================
 
           def extract_value(patterns, text):
@@ -251,7 +233,7 @@ jobs:
 
 
           # =====================================================
-          # التحقق من أسعار الذهب
+          # VALIDATE PRICES
           # =====================================================
 
           def validate_prices(data):
@@ -267,55 +249,35 @@ jobs:
                   value = data.get(key)
 
                   if value is None:
-
-                      return (
-                          False,
-                          f"القيمة مفقودة: {key}"
+                      return False, (
+                          f"Missing value: {key}"
                       )
 
-                  if isinstance(
-                      value,
-                      str
-                  ):
-
-                      return (
-                          False,
-                          f"القيمة ليست رقمًا: {key}"
+                  if isinstance(value, str):
+                      return False, (
+                          f"Invalid value: {key}"
                       )
 
                   if value <= 0:
-
-                      return (
-                          False,
-                          f"القيمة غير منطقية: "
+                      return False, (
+                          f"Invalid price: "
                           f"{key}={value}"
                       )
 
 
-              p18 = data[
-                  "price_gram_18k"
-              ]
+              p18 = data["price_gram_18k"]
 
-              p21 = data[
-                  "price_gram_21k"
-              ]
+              p21 = data["price_gram_21k"]
 
-              p24 = data[
-                  "price_gram_24k"
-              ]
+              p24 = data["price_gram_24k"]
 
-
-              # يجب أن يكون:
-              # 18 < 21 < 24
 
               if not (
                   p18 < p21 < p24
               ):
 
-                  return (
-                      False,
-                      "ترتيب أسعار الذهب "
-                      "غير منطقي: "
+                  return False, (
+                      "Gold prices order is invalid: "
                       f"18={p18}, "
                       f"21={p21}, "
                       f"24={p24}"
@@ -326,15 +288,13 @@ jobs:
 
 
           # =====================================================
-          # قراءة الأسعار القديمة
+          # LOAD OLD PRICES
           # =====================================================
 
           old_prices = {}
 
 
-          if os.path.exists(
-              JSON_FILE
-          ):
+          if os.path.exists(JSON_FILE):
 
               try:
 
@@ -349,15 +309,14 @@ jobs:
               except Exception as e:
 
                   print(
-                      "تحذير: تعذر قراءة "
-                      "prices.json:",
+                      "Warning: could not read "
+                      "old prices.json:",
                       e
                   )
 
 
           # =====================================================
-          # جلب المصدر
-          # مع إعادة المحاولة
+          # FETCH SOURCE
           # =====================================================
 
           html = None
@@ -365,7 +324,7 @@ jobs:
 
           for attempt in range(
               1,
-              MAX_SOURCE_ATTEMPTS + 1
+              SOURCE_ATTEMPTS + 1
           ):
 
               cache_buster = (
@@ -381,9 +340,8 @@ jobs:
 
 
               print(
-                  f"جلب المصدر - محاولة "
-                  f"{attempt}/"
-                  f"{MAX_SOURCE_ATTEMPTS}"
+                  f"Fetching source "
+                  f"{attempt}/{SOURCE_ATTEMPTS}"
               )
 
 
@@ -397,7 +355,7 @@ jobs:
 
 
                   print(
-                      "HTTP Status:",
+                      "HTTP status:",
                       response.status_code
                   )
 
@@ -408,7 +366,7 @@ jobs:
                   if not response.text:
 
                       raise RuntimeError(
-                          "المصدر أعاد صفحة فارغة"
+                          "Empty response from source"
                       )
 
 
@@ -420,41 +378,36 @@ jobs:
               except Exception as e:
 
                   print(
-                      "فشل الاتصال بالمصدر:",
+                      "Source error:",
                       e
                   )
 
 
                   if (
                       attempt <
-                      MAX_SOURCE_ATTEMPTS
+                      SOURCE_ATTEMPTS
                   ):
 
-                      wait_seconds = (
-                          attempt * 5
-                      )
+                      wait = attempt * 5
 
                       print(
-                          f"انتظار "
-                          f"{wait_seconds} "
-                          "ثانية ثم إعادة المحاولة..."
+                          f"Retrying after "
+                          f"{wait} seconds..."
                       )
 
-                      time.sleep(
-                          wait_seconds
-                      )
+                      time.sleep(wait)
 
 
           if not html:
 
               raise SystemExit(
-                  "فشل جلب مصدر أسعار الذهب "
-                  f"بعد {MAX_SOURCE_ATTEMPTS} محاولات."
+                  "Could not fetch gold prices "
+                  "after multiple attempts."
               )
 
 
           # =====================================================
-          # تحليل صفحة Telegram
+          # PARSE TELEGRAM
           # =====================================================
 
           soup = BeautifulSoup(
@@ -472,40 +425,31 @@ jobs:
           if not messages:
 
               raise SystemExit(
-                  "لم يتم العثور على رسائل "
-                  "في قناة المصدر."
+                  "No Telegram messages found."
               )
 
 
           print(
-              f"عدد الرسائل الموجودة: "
-              f"{len(messages)}"
+              f"Found {len(messages)} messages."
           )
 
 
           # =====================================================
-          # البحث من الأحدث إلى الأقدم
+          # FIND LATEST VALID PRICE MESSAGE
           # =====================================================
 
           latest_message = None
 
 
-          for message in reversed(
-              messages
-          ):
+          for message in reversed(messages):
 
               text = message.get_text(
                   separator="\n",
                   strip=True
               )
 
-              text = normalize_text(
-                  text
-              )
+              text = normalize_text(text)
 
-
-              # يجب أن تحتوي الرسالة
-              # على 18 و21 و24
 
               if (
                   re.search(
@@ -532,26 +476,23 @@ jobs:
           if not latest_message:
 
               raise SystemExit(
-                  "لم يتم العثور على "
-                  "رسالة أسعار ذهب صالحة."
+                  "No valid gold price message found."
               )
 
 
           print("")
           print(
-              "========== أحدث رسالة =========="
+              "========== SOURCE MESSAGE =========="
           )
+          print(latest_message)
           print(
-              latest_message
-          )
-          print(
-              "================================"
+              "====================================="
           )
           print("")
 
 
           # =====================================================
-          # استخراج عيار 24
+          # EXTRACT 24K
           # =====================================================
 
           price_24 = extract_value(
@@ -569,7 +510,7 @@ jobs:
 
 
           # =====================================================
-          # استخراج عيار 21
+          # EXTRACT 21K
           # =====================================================
 
           price_21 = extract_value(
@@ -587,7 +528,7 @@ jobs:
 
 
           # =====================================================
-          # استخراج عيار 18
+          # EXTRACT 18K
           # =====================================================
 
           price_18 = extract_value(
@@ -605,7 +546,7 @@ jobs:
 
 
           # =====================================================
-          # جنيه الذهب
+          # GOLD POUND
           # =====================================================
 
           gold_pound = extract_value(
@@ -623,7 +564,7 @@ jobs:
 
 
           # =====================================================
-          # الأوقية
+          # OUNCE
           # =====================================================
 
           ounce_usd = extract_value(
@@ -648,7 +589,7 @@ jobs:
 
 
           # =====================================================
-          # سعر الشراء
+          # BUY
           # =====================================================
 
           buy_price = extract_value(
@@ -666,7 +607,7 @@ jobs:
 
 
           # =====================================================
-          # سعر البيع
+          # SELL
           # =====================================================
 
           sell_price = extract_value(
@@ -684,7 +625,7 @@ jobs:
 
 
           # =====================================================
-          # سعر الدولار
+          # USD / EGP
           # =====================================================
 
           usd_to_egp = extract_value(
@@ -698,7 +639,7 @@ jobs:
 
 
           # =====================================================
-          # دولار الصاغة
+          # SAGHA USD
           # =====================================================
 
           sagha_usd = extract_value(
@@ -716,7 +657,7 @@ jobs:
 
 
           # =====================================================
-          # البيانات الجديدة
+          # NEW DATA
           # =====================================================
 
           extracted_data = {
@@ -751,7 +692,7 @@ jobs:
 
 
           print(
-              "البيانات المستخرجة:"
+              "Extracted data:"
           )
 
           print(
@@ -764,26 +705,24 @@ jobs:
 
 
           # =====================================================
-          # التحقق من البيانات
+          # VALIDATE
           # =====================================================
 
-          valid, validation_message = (
-              validate_prices(
-                  extracted_data
-              )
+          valid, message = validate_prices(
+              extracted_data
           )
 
 
           if not valid:
 
               raise SystemExit(
-                  "تم رفض البيانات الجديدة: "
-                  + validation_message
+                  "Price validation failed: "
+                  + message
               )
 
 
           # =====================================================
-          # مقارنة الأسعار القديمة بالجديدة
+          # COMPARE OLD / NEW
           # =====================================================
 
           new_prices = {}
@@ -814,9 +753,6 @@ jobs:
 
               else:
 
-                  # الاحتفاظ بالبيانات القديمة
-                  # إذا لم يتم استخراج القيمة
-
                   if old_value is not None:
 
                       new_prices[key] = (
@@ -829,7 +765,7 @@ jobs:
 
 
           # =====================================================
-          # وقت القاهرة
+          # CAIRO TIME
           # =====================================================
 
           cairo_now = datetime.now(
@@ -854,7 +790,7 @@ jobs:
 
 
           # =====================================================
-          # تحديث prices.json
+          # WRITE JSON
           # =====================================================
 
           if (
@@ -879,19 +815,19 @@ jobs:
 
 
               print(
-                  "تم تحديث prices.json."
+                  "prices.json updated."
               )
 
 
           else:
 
               print(
-                  "لا يوجد تغيير في الأسعار."
+                  "No price change."
               )
 
 
           # =====================================================
-          # النشر في قناة @yomgdyd30
+          # TELEGRAM PUBLISH
           # =====================================================
 
           if prices_changed:
@@ -905,7 +841,7 @@ jobs:
 
                   raise SystemExit(
                       "TELEGRAM_BOT_TOKEN "
-                      "غير موجود في GitHub Secrets."
+                      "is missing."
                   )
 
 
@@ -987,22 +923,18 @@ jobs:
               }
 
 
-              telegram_sent = False
+              sent = False
 
-
-              # ================================================
-              # إعادة محاولة النشر في Telegram
-              # ================================================
 
               for attempt in range(
                   1,
-                  MAX_TELEGRAM_ATTEMPTS + 1
+                  TELEGRAM_ATTEMPTS + 1
               ):
 
                   print(
-                      f"إرسال Telegram "
+                      f"Telegram publish "
                       f"{attempt}/"
-                      f"{MAX_TELEGRAM_ATTEMPTS}"
+                      f"{TELEGRAM_ATTEMPTS}"
                   )
 
 
@@ -1018,7 +950,7 @@ jobs:
 
 
                       print(
-                          "Telegram HTTP:",
+                          "Telegram status:",
                           telegram_response.status_code
                       )
 
@@ -1037,30 +969,19 @@ jobs:
                               "ok"
                           ):
 
-                              telegram_sent = True
+                              sent = True
 
                               print(
-                                  "================================"
-                              )
-
-                              print(
-                                  "تم النشر بنجاح "
-                                  "في قناة:"
-                              )
-
-                              print(
-                                  TARGET_CHANNEL
-                              )
-
-                              print(
-                                  "================================"
+                                  "Successfully "
+                                  "published to "
+                                  f"{TARGET_CHANNEL}"
                               )
 
                               break
 
 
                       print(
-                          "فشل Telegram:",
+                          "Telegram error:",
                           telegram_response.text
                       )
 
@@ -1068,69 +989,71 @@ jobs:
                   except Exception as e:
 
                       print(
-                          "خطأ أثناء النشر:",
+                          "Telegram connection error:",
                           e
                       )
 
 
                   if (
                       attempt <
-                      MAX_TELEGRAM_ATTEMPTS
+                      TELEGRAM_ATTEMPTS
                   ):
 
                       time.sleep(5)
 
 
-              if not telegram_sent:
+              if not sent:
 
                   raise SystemExit(
-                      "فشل النشر في Telegram "
-                      "بعد عدة محاولات."
+                      "Telegram publishing failed."
                   )
 
 
           else:
 
               print(
-                  "السعر لم يتغير، "
-                  "لن يتم نشر رسالة جديدة."
+                  "Price did not change."
+              )
+
+              print(
+                  "No Telegram message sent."
               )
 
 
           # =====================================================
-          # النهاية
+          # FINISHED
           # =====================================================
 
           print("")
           print(
-              "================================"
+              "=========================================="
           )
 
           print(
-              "اكتملت عملية تحديث أسعار الذهب."
+              "GOLD PRICE UPDATE FINISHED"
           )
 
           print(
-              f"وقت التحديث: {updated_at}"
+              f"Time: {updated_at}"
           )
 
           print(
-              f"المصدر: {SOURCE_CHANNEL}"
+              f"Source: {SOURCE_CHANNEL}"
           )
 
           print(
-              f"قناة النشر: {TARGET_CHANNEL}"
+              f"Target: {TARGET_CHANNEL}"
           )
 
           print(
-              "================================"
+              "=========================================="
           )
 
           PY
 
 
       # ==========================================
-      # 5. التحقق من prices.json
+      # 5. Validate prices.json
       # ==========================================
       - name: Validate prices.json
         run: |
@@ -1145,12 +1068,10 @@ jobs:
           FILE = "prices.json"
 
 
-          if not os.path.exists(
-              FILE
-          ):
+          if not os.path.exists(FILE):
 
               print(
-                  "ERROR: prices.json غير موجود."
+                  "ERROR: prices.json does not exist."
               )
 
               sys.exit(1)
@@ -1180,8 +1101,7 @@ jobs:
               if value is None:
 
                   print(
-                      f"ERROR: القيمة مفقودة: "
-                      f"{key}"
+                      f"ERROR: missing {key}"
                   )
 
                   sys.exit(1)
@@ -1193,8 +1113,7 @@ jobs:
               ):
 
                   print(
-                      f"ERROR: القيمة ليست رقمًا: "
-                      f"{key}={value}"
+                      f"ERROR: {key} is not numeric"
                   )
 
                   sys.exit(1)
@@ -1203,8 +1122,7 @@ jobs:
               if value <= 0:
 
                   print(
-                      f"ERROR: القيمة غير صالحة: "
-                      f"{key}={value}"
+                      f"ERROR: invalid {key}"
                   )
 
                   sys.exit(1)
@@ -1228,30 +1146,21 @@ jobs:
           ):
 
               print(
-                  "ERROR: ترتيب أسعار "
-                  "العيارات غير منطقي."
+                  "ERROR: invalid gold price order."
               )
 
               sys.exit(1)
 
 
           print(
-              "OK: prices.json صالح."
-          )
-
-          print(
-              json.dumps(
-                  data,
-                  ensure_ascii=False,
-                  indent=2
-              )
+              "prices.json validation OK."
           )
 
           PY
 
 
       # ==========================================
-      # 6. حفظ prices.json في GitHub
+      # 6. Commit prices.json
       # ==========================================
       - name: Commit updated prices
         run: |
@@ -1268,7 +1177,7 @@ jobs:
 
           if git diff --cached --quiet; then
 
-            echo "لا توجد تغييرات في prices.json."
+            echo "No changes to commit."
 
           else
 
@@ -1282,6 +1191,6 @@ jobs:
             git push \
               origin main
 
-            echo "تم رفع الأسعار الجديدة إلى GitHub."
+            echo "prices.json pushed successfully."
 
           fi
