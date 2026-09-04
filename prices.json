@@ -1,13 +1,13 @@
 {
-  "price_gram_24k": 7229,
-  "price_gram_21k": 6325,
-  "price_gram_18k": 5422,
-  "gold_pound": 50600,
-  "ounce_usd": 4432,
-  "buy_price": 6325,
-  "sell_price": 6296,
+  "price_gram_24k": 7223,
+  "price_gram_21k": 6320,
+  "price_gram_18k": 5417,
+  "gold_pound": 50560,
+  "ounce_usd": 4433,
+  "buy_price": 6320,
+  "sell_price": 6290,
   "usd_to_egp": 51,
-  "sagha_usd": 50.74,
-  "updated_at": "2026-09-04 20:05:13",
+  "sagha_usd": 50.68,
+  "updated_at": "2026-09-04 20:15:19",
   "source": "https://t.me/s/goldpricenowlive?before=9999999"
 }
